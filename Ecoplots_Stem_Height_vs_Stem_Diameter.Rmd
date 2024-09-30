@@ -20,6 +20,9 @@ library(gridExtra)
 ```
 
 # Load and explore the data
+
+## WILL NEED TO CHANGE THIS TO SELECT ONLY TREES WITHIN QLD
+
 ```{r echo = FALSE}
 library(httr)
 
@@ -57,13 +60,16 @@ df$stemHeight_metre <- as.numeric(df$stemHeight_metre)
 df$stemDiameter_centimetre <- as.numeric(df$stemDiameter_centimetre)
 ```
 
+## DEAL WITH REPEATED MEASUREMENTS
+
 ## Plot the data
 ```{r}
 # Plot all the data
 plot(df$stemHeight_metre, df$stemDiameter_centimetre) 
 ```
 
-# Fit the linear regression model
+## Fit the linear regression model
+```{r}
 model1 <- glm(stemDiameter_centimetre ~ stemHeight_metre, data = df)
 summary(model1)
 ```
@@ -74,43 +80,60 @@ THIS NEEDS WORK AFTER WE SORT OUT THE ISSUES RE SCIENTIFIC NAME AND ACCEPTED NAM
 2) WE WANT UNIQUE ACCEPTED NAMES, PLUS THE FAMILY NAME. IN ECOPLOTS THE FIELD TAXON CONTAINS THE FULL TAXONOMY FOR THAT SPECIES. HOWEVER, WHEN WE EXPORT THE DATA, INSTEAD OF THE TAXON AS A CHARACTER STRING, WE GET AN URL.
 3) FOR THIS SPECIFIC EXAMPLE WE NEED TO REMOVE THE TREES THAT WERE NOT IDENTIFIED AT A SPECIES LEVEL. THIS WILL BE EASIER ONCE WE RESOLVE ISSUES 1 AND 2. 
 
-Issues
+```{r}
+df_Eucalyptus<-subset(df, grepl("Eucalyptus", scientificName))
+df_Eucalyptus$scientificName <- droplevels(df_Eucalyptus$scientificName)
+plot(df_Eucalyptus$stemHeight_metre, df_Eucalyptus$stemDiameter_centimetre) 
+```
+
+## Fit the model only for Eucalyptus trees
+```{r}
+model2 <- glm(stemDiameter_centimetre ~ stemHeight_metre, data = df_Eucalyptus)
+summary(model2)
+```
+
+## Issues
 ```{r}
 #levels(df_Eucalyptus$scientificName)
 #levels(df_Eucalyptus$taxon)
 ```
 
+# Drop species with a small sample size
 ```{r}
-df_Eucalyptus<-subset(df, grepl("Eucalyptus", scientificName))
-df_Eucalyptus$scientificName <- droplevels(df_Eucalyptus$scientificName)
-plot(df_Eucalyptus$stemHeight_metre, df_Eucalyptus$stemDiameter_centimetre) 
-
-model2 <- glm(stemDiameter_centimetre ~ stemHeight_metre, data = df_Eucalyptus)
-summary(model2)
-
 level_counts <- table(df_Eucalyptus$scientificName) # Count the occurrences of each level
 print(level_counts)
-
-# Drop levels with less than 1000 entries
 levels_to_keep <- names(level_counts[level_counts >= 1000]) # Identify levels with a sample size smaller than the threshold
 df_Eucalyptus_filtered <- df_Eucalyptus[df_Eucalyptus$scientificName %in% levels_to_keep, ] # Subset the data to keep only rows with the desired levels
 df_Eucalyptus_filtered$scientificName <- droplevels(df_Eucalyptus_filtered$scientificName) # Drop unused levels
 levels(df_Eucalyptus_filtered$scientificName) # Check the resulting levels
+```
 
+## Re-fit the model using only species with a large sample size
+```{r}
 model3 <- lm(stemDiameter_centimetre ~ stemHeight_metre + scientificName, df_Eucalyptus_filtered)
 summary(model3)
-
 ```
-# Plotting each species in different colors
+
+## Plotting each species in different colors
 ```{r}
 ggplot(df_Eucalyptus_filtered, aes(x = stemHeight_metre, y = stemDiameter_centimetre, color = scientificName)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE) +  # Adds regression lines
   theme_minimal() +
   labs(title = "Regression Lines for Different Species")
-
 ```
 
+# Select only large trees
+
+## Identify the most common species
+
+## Plot the location of the trees
+NOTE: WE HAVE THE LAT LON OF THE PLOT AND THE XY LOCATION OF THE TREE WITHIN THE PLOT. MAY NEED TO INVESTIGATE BEST WAY TO HANDLE THIS.
+
+# Looking at tree growth (only for trees with repeated measurement)
+## Select trees that have repeated measurements
+## Calculate the growth rate of the tree
+## Model teh growth rate by species and/or ecoregion
 
 
 
