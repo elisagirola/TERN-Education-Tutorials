@@ -46,7 +46,7 @@ body = '{
 
 res <- VERB("POST", url = "https://ecoplots.tern.org.au/api/v1.0/data?dformat=csv", body = body, add_headers(headers))
 
-cat(content(res, 'text'))
+# cat(content(res, 'text'))
 
 df <- read.table(text = content(res, 'text'), sep =",", header = TRUE, stringsAsFactors = FALSE)
 ```
