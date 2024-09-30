@@ -1,30 +1,118 @@
 ---
-title: "Ecoplots_Stem_Height_vs_Stem_Diameter_old"
+title: "Ecoplots_Stem_Height_vs_Stem_Diameter"
 author: "Elisa"
-date: "2024-09-25"
+date: "2024-08-19"
 output: word_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Set your working directory
+```{r}
+rm(list=ls()) # cleans the workspace
+setwd("C:/Users/uqegirol") # Note that your path will be different
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+# Load libraries
+```{r}
+library(tidyverse)
+library(httr)
+library(ggpubr)
+library(gridExtra)
 ```
 
-## Including Plots
+# Load and explore the data
+```{r echo = FALSE}
+library(httr)
 
-You can also embed plots, for example:
+headers = c(
+  'X-Api-Key' = 'd3h3UDhZZjJqZ3dUN3dQOS5pcUgxJj1FWU4nMH04JgtBCU54KChkC1ZcWCJYNzFfOmZWMThSdAsuY1NfMEhoXkhZKW10bSh+bwk0MyJac1Rz',
+  'Content-Type' = 'application/json'
+)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+body = '{
+  "query": {
+    "feature_type": [
+      "http://linked.data.gov.au/def/tern-cv/60d7edf8-98c6-43e9-841c-e176c334d270"
+    ],
+    "observed_property": [
+      "http://linked.data.gov.au/def/tern-cv/70646576-6dc7-4bc5-a9d8-c4c366850df0",
+      "http://linked.data.gov.au/def/tern-cv/c3111898-8404-4306-9599-e7866a749de7",
+      "http://linked.data.gov.au/def/tern-cv/5701d307-bbea-415a-8857-fbf27d5b93ed"
+    ]
+  }
+}';
+
+res <- VERB("POST", url = "https://ecoplots.tern.org.au/api/v1.0/data?dformat=csv", body = body, add_headers(headers))
+
+cat(content(res, 'text'))
+
+df <- read.table(text = content(res, 'text'), sep =",", header = TRUE, stringsAsFactors = FALSE)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Restructure the data
+```{r}
+str(df)
+df$datasetTitle <- as.factor(df$datasetTitle)
+df$scientificName <- as.factor(df$scientificName)
+df$stemHeight_metre <- as.numeric(df$stemHeight_metre)
+df$stemDiameter_centimetre <- as.numeric(df$stemDiameter_centimetre)
+```
+
+## Plot the data
+```{r}
+# Plot all the data
+plot(df$stemHeight_metre, df$stemDiameter_centimetre) 
+```
+
+# Fit the linear regression model
+model1 <- glm(stemDiameter_centimetre ~ stemHeight_metre, data = df)
+summary(model1)
+```
+
+# Select Eucalyptus trees
+THIS NEEDS WORK AFTER WE SORT OUT THE ISSUES RE SCIENTIFIC NAME AND ACCEPTED NAME. ISSUES ARE:
+1) WHAT WE NOW CALL SCIENTIFICNAME IS ACTUALLY THE NAME PROVIDED BY THE DATA PROVIDER. THAT IS USEFUL INFORMATION, BUT NOT WHAT WE WANT FOR THE ANALYSES AS THESE ARE NOT STANDARDISED AND THERE ARE REPETITIONS. 
+2) WE WANT UNIQUE ACCEPTED NAMES, PLUS THE FAMILY NAME. IN ECOPLOTS THE FIELD TAXON CONTAINS THE FULL TAXONOMY FOR THAT SPECIES. HOWEVER, WHEN WE EXPORT THE DATA, INSTEAD OF THE TAXON AS A CHARACTER STRING, WE GET AN URL.
+3) FOR THIS SPECIFIC EXAMPLE WE NEED TO REMOVE THE TREES THAT WERE NOT IDENTIFIED AT A SPECIES LEVEL. THIS WILL BE EASIER ONCE WE RESOLVE ISSUES 1 AND 2. 
+
+Issues
+```{r}
+#levels(df_Eucalyptus$scientificName)
+#levels(df_Eucalyptus$taxon)
+```
+
+```{r}
+df_Eucalyptus<-subset(df, grepl("Eucalyptus", scientificName))
+df_Eucalyptus$scientificName <- droplevels(df_Eucalyptus$scientificName)
+plot(df_Eucalyptus$stemHeight_metre, df_Eucalyptus$stemDiameter_centimetre) 
+
+model2 <- glm(stemDiameter_centimetre ~ stemHeight_metre, data = df_Eucalyptus)
+summary(model2)
+
+level_counts <- table(df_Eucalyptus$scientificName) # Count the occurrences of each level
+print(level_counts)
+
+# Drop levels with less than 1000 entries
+levels_to_keep <- names(level_counts[level_counts >= 1000]) # Identify levels with a sample size smaller than the threshold
+df_Eucalyptus_filtered <- df_Eucalyptus[df_Eucalyptus$scientificName %in% levels_to_keep, ] # Subset the data to keep only rows with the desired levels
+df_Eucalyptus_filtered$scientificName <- droplevels(df_Eucalyptus_filtered$scientificName) # Drop unused levels
+levels(df_Eucalyptus_filtered$scientificName) # Check the resulting levels
+
+model3 <- lm(stemDiameter_centimetre ~ stemHeight_metre + scientificName, df_Eucalyptus_filtered)
+summary(model3)
+
+```
+# Plotting each species in different colors
+```{r}
+ggplot(df_Eucalyptus_filtered, aes(x = stemHeight_metre, y = stemDiameter_centimetre, color = scientificName)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Adds regression lines
+  theme_minimal() +
+  labs(title = "Regression Lines for Different Species")
+
+```
+
+
+
+
+
+
