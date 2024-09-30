@@ -102,7 +102,7 @@ summary(model2)
 ```{r}
 level_counts <- table(df_Eucalyptus$scientificName) # Count the occurrences of each level
 print(level_counts)
-levels_to_keep <- names(level_counts[level_counts >= 1000]) # Identify levels with a sample size smaller than the threshold
+levels_to_keep <- names(level_counts[level_counts >= 1000]) # Identify levels with a sample size above the threshold
 df_Eucalyptus_filtered <- df_Eucalyptus[df_Eucalyptus$scientificName %in% levels_to_keep, ] # Subset the data to keep only rows with the desired levels
 df_Eucalyptus_filtered$scientificName <- droplevels(df_Eucalyptus_filtered$scientificName) # Drop unused levels
 levels(df_Eucalyptus_filtered$scientificName) # Check the resulting levels
@@ -124,11 +124,31 @@ ggplot(df_Eucalyptus_filtered, aes(x = stemHeight_metre, y = stemDiameter_centim
 ```
 
 # Select only large trees
+```{r}
+df_LargeTrees<-df[df$stemDiameter_centimetre > 100, ]
+```
 
 ## Identify the most common species
+```{r}
+df_LargeTrees$scientificName <- droplevels(df_LargeTrees$scientificName) # Drop unused levels
+counts <- table(df_LargeTrees$scientificName) # Create a frequency table of the categorical variable
+
+level_counts <- table(df_LargeTrees$scientificName) # Count the occurrences of each level
+levels_to_keep <- names(level_counts[level_counts >= 10]) # Identify levels with a sample size above the threshold
+df_LargeTrees <- df_LargeTrees[df_LargeTrees$scientificName %in% levels_to_keep, ] # Subset the data to keep only rows with the
+
+
+ggplot(df_LargeTrees, aes(x = scientificName)) +
+  geom_bar(fill = "skyblue") +
+  labs(title = "Bar Plot", x = "scientificName", y = "Frequency")
+```
 
 ## Plot the location of the trees
 NOTE: WE HAVE THE LAT LON OF THE PLOT AND THE XY LOCATION OF THE TREE WITHIN THE PLOT. MAY NEED TO INVESTIGATE BEST WAY TO HANDLE THIS.
+
+
+
+
 
 # Looking at tree growth (only for trees with repeated measurement)
 ## Select trees that have repeated measurements
