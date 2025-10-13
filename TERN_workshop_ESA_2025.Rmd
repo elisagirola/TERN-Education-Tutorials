@@ -1,0 +1,316 @@
+---
+title: "TERN_workshop_ESA_2025"
+author: "Elisa"
+date: "2025-09-22"
+output: word_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading the packages
+```{r, include=FALSE}
+# Loading the packages ----------------------------------------------------
+
+rm(list=ls()) # cleans the workspace
+```
+
+
+
+# For each dataset, we'll write code to access from a locally saved file and from a url (e.g. using the R generating code)
+
+# VEGETATION
+
+<!-- ## Import the data from Ecoplots -->
+<!-- ```{r} -->
+
+
+<!-- ``` -->
+
+## Import the data from a locally saved file
+```{r}
+vegetation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\data\\csv\\plant-occurrence_data_26ec5224d682b8d0eab19bd53afb0454.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+
+```
+
+## For sites that have multiple site visits keep only the latest one
+```{r}
+library(dplyr)
+vegetation <- vegetation %>%
+  group_by(siteName) %>% # group rows for each site
+  filter(siteVisitName == max(siteVisitName)) %>% # keep rows only for the latest visit name within that site
+  ungroup() # remove grouping after filtering
+
+```
+
+## Create a map to show the locations of each plot
+```{r}
+library(dplyr)
+library(ggplot2)
+library(maps)
+
+# Keep one row per site
+vegetation_sites <- vegetation %>%
+  group_by(siteName) %>%
+  slice(1) %>%   # pick the first row per site (they all share same coords)
+  ungroup()
+
+# Load Australia map
+australia_map <- map_data("world", region = "Australia")
+
+# Plot
+ggplot() +
+  geom_polygon(data = australia_map, aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  geom_point(data = vegetation_sites,
+             aes(x = longitude_Degree, y = latitude_Degree),
+             color = "darkgreen", size = 2) +
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +  # focus on Australia
+  theme_minimal() +
+  labs(title = "Vegetation Plot Locations in Australia",
+       x = "Longitude", y = "Latitude")
+
+```
+
+
+## Calculate species richness, species diversity and fractional cover
+## NOTE: WE MAY WANT TO REDOWNLOAD THE DATA INCLUDING THE PARAMETER TAXON. FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON. 
+```{r}
+
+# Calculate species richness 
+library(dplyr)
+
+plot_table <- vegetation %>%
+  group_by(siteName, latitude_Degree, longitude_Degree, 
+           plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
+           plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate) %>%
+  summarise(species_richness = n_distinct(scientificName), .groups = "drop") %>%
+  select(siteName, latitude_Degree, longitude_Degree, 
+         plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
+         plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate,
+         species_richness)
+
+# Calculate species diversity (Simpson Diversity Index)
+library(dplyr)
+library(vegan)
+
+simpson_table <- vegetation %>%
+  group_by(siteName) %>%
+  summarise(
+    SDI = diversity(table(scientificName), index = "simpson"),
+    .groups = "drop"
+  )
+
+plot_table <- plot_table %>%
+  left_join(simpson_table, by = "siteName") # saves to the plot_table
+
+# Calculate "fractional cover", i.e. proportion of points in each plot that had vegetation
+
+
+
+
+```
+
+
+# TEMPERATURE
+<!-- ## Import the data from Ecoplots -->
+<!-- ```{r} -->
+
+
+<!-- ``` -->
+
+## Import the data from a locally saved file
+```{r}
+temperature<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Temperature_15649682977911f09e3f26ea16246ad1\\Temperature_15649682977911f09e3f26ea16246ad1\\data\\csv\\weather_data_091e6bfe7d81bff49fc08251b743e2cc.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+
+```
+
+## Select data that match plot ID and sitevisit for vegetation
+```{r}
+library(dplyr)
+
+# Join temperature data into plot_table
+plot_table <- plot_table %>%
+  left_join(
+    temperature %>%
+      select(siteName, siteVisitName, 
+             maximumTemperature_degreeCelsius, 
+             minimumTemperature_degreeCelsius, 
+             temperatureAnnualMean_degreeCelsius),
+    by = c("siteName", "siteVisitName")
+  )
+
+```
+
+## Plot the vagetation and temperature data
+```{r}
+library(ggplot2)
+
+# Species richness vs temperature
+ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = species_richness)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
+  labs(
+    x = "Annual Mean Temperature (°C)",
+    y = "Species Richness") +
+  theme_minimal()
+
+# Simpson Diversity Index (SDI) vs temperature
+ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
+  geom_point(color = "green", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
+  labs(
+    x = "Annual Mean Temperature (°C)",
+    y = "Simpson Diversity Index (SDI)") +
+  theme_minimal()
+
+```
+
+# PRECIPITATION
+
+# NOTE: CHECK THE DEFINITION OF RANGELAND. DOES IT INCLUDE PRECIPITATION???
+
+<!-- ## Import the data from Ecoplots -->
+<!-- ```{r} -->
+
+
+<!-- ``` -->
+
+## Import the data from a locally saved file
+```{r}
+precipitation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Precipitation_dabcf7bfa7f911f09d2526ea16246ad1\\data\\csv\\weather_data_e1f82ca1c440bdc1a664bb0242f085c4.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+
+```
+
+## Select data that match plot ID and sitevisit for vegetation
+```{r}
+library(dplyr)
+
+# Join temperature data into plot_table
+plot_table <- plot_table %>%
+  left_join(
+    precipitation %>%
+      select(siteName, siteVisitName, 
+             precipitationAnnualMean_millimetre),
+    by = c("siteName", "siteVisitName")
+  )
+
+```
+
+## Plot the vagetation and precipitation data
+```{r}
+library(ggplot2)
+
+# Species richness vs precipitation
+ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
+  labs(
+    x = "Annual Mean Precipitation (mm)",
+    y = "Species Richness") +
+  theme_minimal()
+
+# Simpson Diversity Index (SDI) vs precipitation
+ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
+  geom_point(color = "green", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
+  labs(
+    x = "Annual Mean Precipitation (mm)",
+    y = "Simpson Diversity Index (SDI)") +
+  theme_minimal()
+
+
+```
+
+# SOIL - LANDSCAPE
+## From locally saved files
+
+```{r}
+library(terra)
+library(dplyr)
+
+# Folder with soil .tif files
+soil_folder <- "C:/Users/uqegirol/Desktop/Documents/Conferences/ESA/ESA 2025/Soil"
+
+# List all .tif files
+tif_files <- list.files(soil_folder, pattern = "\\.tif$", full.names = TRUE)
+
+# Extract unique parameters from file names (first 3 letters)
+parameters <- unique(substr(basename(tif_files), 1, 3))
+
+# Create a SpatVector of plot locations
+plot_points <- vect(plot_table, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
+
+# Loop through each parameter
+for (param in parameters) {
+  
+  # Select all files for this parameter
+  param_files <- tif_files[substr(basename(tif_files), 1, 3) == param]
+  
+  # Load rasters
+  rasters <- rast(param_files)
+  
+  # Extract values at plot locations for all depths
+  values_all_depths <- extract(rasters, plot_points)[,-1]  # remove ID column
+  
+  # Calculate mean across depths
+  values_mean <- rowMeans(values_all_depths, na.rm = TRUE)
+  
+  # Add as new column to plot_table
+  plot_table[[param]] <- values_mean
+}
+
+
+# Percentage silt 
+
+# Percentage clay 
+
+# Percentage sand 
+# 
+# Nitrogen 
+# 
+# Phosphorus 
+# 
+# Soil pH 
+# 
+# Organic matter content 
+# 
+# Soil moisture 
+```
+
+# create graphs for each variable
+
+```
+
+
+# SOIL - SURVEILLANCE
+```{r}
+# Grade (soil texture)
+
+# Soil pH 
+
+# match locations with vegetation data > is any plot missing? 
+
+# compare values with Landscape > choose which one is better
+
+# create histograms for each variable
+
+```
+
+
+# MODEL
+```{r}
+
+# correlation matrix
+# 
+# Plant richness ~ soil + Precip + AirTemp 
+# 
+# Plant diversity ~ soil + Precip + AirTemp 
+# 
+# Plant density ~ soil + Precip + AirTemp 
+
+
+```
+```
