@@ -6,7 +6,9 @@ output: word_document
 ---
 
 !!!!! THIS IS A TEST TO SEE IF WE CAN PUSH TO GITHUB 
-!!! AND TESTING AGAIN
+!!! AND TESTING AGAIN!!!
+
+TEST TO SHOW HOW IT WORKS
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
