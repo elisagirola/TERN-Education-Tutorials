@@ -1,11 +1,9 @@
 ---
 title: "TERN_workshop_ESA_2025"
-author: "Elisa"
+author: "Elisa Girola and Eleanor Velasquez"
 date: "2025-09-22"
 output: word_document
 ---
-
-One more testXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -18,9 +16,17 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls()) # cleans the workspace
 ```
 
+# FOLDER PATH
+For each dataset we are providing both the code to access the files from a locally saved copy and from a remote copy. Remote access is typically slower, but ensures that you are always accessing the latest version of the data. Due to time constraints, during the workshop we will access locally saved data. The code that accesses the data remotely has been commented out. 
+
+The following code specifies the folder path to access data saved locally. You can simply copy and paste your file path here, without the quotation marks. 
+```{r}
+# Ask user for folder path at runtime
+data_folder <- choose.dir()  # lets you select the folder interactively
+
+```
 
 
-# For each dataset, we'll write code to access from a locally saved file and from a url (e.g. using the R generating code)
 
 # VEGETATION
 
@@ -32,7 +38,14 @@ rm(list=ls()) # cleans the workspace
 
 ## Import the data from a locally saved file
 ```{r}
-vegetation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\data\\csv\\plant-occurrence_data_26ec5224d682b8d0eab19bd53afb0454.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Plant_occurrence.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
@@ -75,9 +88,8 @@ ggplot() +
 
 ```
 
-
 ## Calculate species richness, species diversity and fractional cover
-## NOTE: WE MAY WANT TO REDOWNLOAD THE DATA INCLUDING THE PARAMETER TAXON. FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON. 
+## NOTE: WE MAY WANT TO REDOWNLOAD THE DATA INCLUDING THE PARAMETER TAXON (DONE NOW). FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON (TO DO). 
 ```{r}
 
 # Calculate species richness 
@@ -124,7 +136,14 @@ plot_table <- plot_table %>%
 
 ## Import the data from a locally saved file
 ```{r}
-temperature<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Temperature_15649682977911f09e3f26ea16246ad1\\Temperature_15649682977911f09e3f26ea16246ad1\\data\\csv\\weather_data_091e6bfe7d81bff49fc08251b743e2cc.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Temperature.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+temperature <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
@@ -181,7 +200,14 @@ ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
 
 ## Import the data from a locally saved file
 ```{r}
-precipitation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Precipitation_dabcf7bfa7f911f09d2526ea16246ad1\\data\\csv\\weather_data_e1f82ca1c440bdc1a664bb0242f085c4.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Precipitation.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+precipitation <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
@@ -200,7 +226,7 @@ plot_table <- plot_table %>%
 
 ```
 
-## Plot the vagetation and precipitation data
+## Plot the vegetation and precipitation data
 ```{r}
 library(ggplot2)
 
@@ -222,21 +248,63 @@ ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
     y = "Simpson Diversity Index (SDI)") +
   theme_minimal()
 
-
 ```
 
 # SOIL - LANDSCAPE
+## Access data directly from WCS
+This is an example to access just one file directly. More layers can be added. Please note each layer requires several minutes to run. 
+```{r}
+# library(terra)
+# 
+# # WCS endpoint and layer
+# base_url <- "https://geoserver.tern.org.au/geoserver/slga/CLY_v2/wcs"
+# layer <- "slga__cly_ev_n_p_au_trn_n_20210902"
+# 
+# # Small buffer around each point (0.01 degrees ~1 km)
+# buffer <- 0.01
+# 
+# # Function to get clay value at a single point
+# get_clay_at_point <- function(lon, lat) {
+#   xmin <- lon - buffer
+#   xmax <- lon + buffer
+#   ymin <- lat - buffer
+#   ymax <- lat + buffer
+#   
+#   getcov <- paste0(
+#     base_url,
+#     "?service=WCS&version=2.0.1&request=GetCoverage",
+#     "&coverageId=", layer,
+#     "&format=image/geotiff",
+#     "&subset=Long(", xmin, ",", xmax, ")",
+#     "&subset=Lat(", ymin, ",", ymax, ")"
+#   )
+#   
+#   # Download tiny raster
+#   r <- rast(getcov)
+#   
+#   # Extract value at the exact point
+#   extract(r, vect(data.frame(lon=lon, lat=lat), geom=c("lon","lat"), crs="EPSG:4326"))[,2]
+# }
+# 
+# # Apply to all points
+# plot_table$CLY_0_5cm <- mapply(get_clay_at_point,
+#                                lon = plot_table$longitude_Degree,
+#                                lat = plot_table$latitude_Degree)
+# 
+# head(plot_table)
+
+```
+
 ## From locally saved files
 
+## NOTE: FOR https://portal.tern.org.au/metadata/TERN/482301c2-b9a1-4345-b142-815f9b37890a I.E. WATER CONTEN, WE NEED TO CLARIFY IF IT'S MM OR PERCENT
+## FOR NITROGEN AND PHOSPHORUS WE NEED THE UNIT. BETTER CHECK THE UNITS FOR ALL VARIABLES AND STANDARDISE VARIABLE NAMES. 
 ```{r}
 library(terra)
 library(dplyr)
 
-# Folder with soil .tif files
-soil_folder <- "C:/Users/uqegirol/Desktop/Documents/Conferences/ESA/ESA 2025/Soil"
-
-# List all .tif files
-tif_files <- list.files(soil_folder, pattern = "\\.tif$", full.names = TRUE)
+# List all .tif files in the folder
+tif_files <- list.files(data_folder, pattern = "\\.tif$", full.names = TRUE)
 
 # Extract unique parameters from file names (first 3 letters)
 parameters <- unique(substr(basename(tif_files), 1, 3))
@@ -253,37 +321,30 @@ for (param in parameters) {
   # Load rasters
   rasters <- rast(param_files)
   
-  # Extract values at plot locations for all depths
-  values_all_depths <- extract(rasters, plot_points)[,-1]  # remove ID column
-  
-  # Calculate mean across depths
-  values_mean <- rowMeans(values_all_depths, na.rm = TRUE)
+  # Extract values at plot locations for all depths (or single raster if only one file)
+  values <- extract(rasters, plot_points)[,-1]  # remove ID column
   
   # Add as new column to plot_table
-  plot_table[[param]] <- values_mean
+  plot_table[[param]] <- values
 }
 
+library(dplyr)
 
-# Percentage silt 
-
-# Percentage clay 
-
-# Percentage sand 
-# 
-# Nitrogen 
-# 
-# Phosphorus 
-# 
-# Soil pH 
-# 
-# Organic matter content 
-# 
-# Soil moisture 
+plot_table <- plot_table %>%
+  rename(
+    availableWaterCapacity_millimetre = AWC,
+    clay_percentage = CLY,
+    nitrogen = NTO,
+    pH = PHC,
+    phosphorus = PTO,
+    silt_percentage = SLT,
+    sand_percentage = SND,
+    organicCarbon = SOC
+  )
 ```
 
 # create graphs for each variable
 
-```
 
 
 # SOIL - SURVEILLANCE
