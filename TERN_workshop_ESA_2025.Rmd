@@ -12,8 +12,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # Loading the packages
 ```{r, include=FALSE}
 # Loading the packages ----------------------------------------------------
-
 rm(list=ls()) # cleans the workspace
+
 ```
 
 # FOLDER PATH
@@ -21,8 +21,8 @@ For each dataset we are providing both the code to access the files from a local
 
 The following code specifies the folder path to access data saved locally. You can simply copy and paste your file path here, without the quotation marks. 
 ```{r}
-# Ask user for folder path at runtime
-data_folder <- choose.dir()  # lets you select the folder interactively
+# Select data folder
+data_folder <- rstudioapi::selectDirectory()
 
 ```
 
@@ -59,17 +59,21 @@ vegetation <- vegetation %>%
 
 ```
 
+# Create a table of plot level data
+```{r}
+# Keep one row per site
+plot_level_data <- vegetation %>%
+  group_by(siteName) %>%
+  slice(1) %>%   # pick the first row per site (they all share the same plot details)
+  ungroup()
+
+```
+
 ## Create a map to show the locations of each plot
 ```{r}
 library(dplyr)
 library(ggplot2)
 library(maps)
-
-# Keep one row per site
-vegetation_sites <- vegetation %>%
-  group_by(siteName) %>%
-  slice(1) %>%   # pick the first row per site (they all share same coords)
-  ungroup()
 
 # Load Australia map
 australia_map <- map_data("world", region = "Australia")
@@ -78,32 +82,30 @@ australia_map <- map_data("world", region = "Australia")
 ggplot() +
   geom_polygon(data = australia_map, aes(x = long, y = lat, group = group),
                fill = "gray90", color = "gray50") +
-  geom_point(data = vegetation_sites,
+  geom_point(data = plot_level_data,
              aes(x = longitude_Degree, y = latitude_Degree),
              color = "darkgreen", size = 2) +
   coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +  # focus on Australia
   theme_minimal() +
-  labs(title = "Vegetation Plot Locations in Australia",
+  labs(title = "Rangeland vegetation plots",
        x = "Longitude", y = "Latitude")
+
+rm(australia_map) # remove temporary tables
 
 ```
 
 ## Calculate species richness, species diversity and fractional cover
-## NOTE: WE MAY WANT TO REDOWNLOAD THE DATA INCLUDING THE PARAMETER TAXON (DONE NOW). FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON (TO DO). 
+## NOTE: FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON (TO DO). 
 ```{r}
-
 # Calculate species richness 
 library(dplyr)
 
-plot_table <- vegetation %>%
-  group_by(siteName, latitude_Degree, longitude_Degree, 
-           plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
-           plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate) %>%
-  summarise(species_richness = n_distinct(scientificName), .groups = "drop") %>%
-  select(siteName, latitude_Degree, longitude_Degree, 
-         plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
-         plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate,
-         species_richness)
+richness_table <- vegetation %>%
+  group_by(siteName) %>%
+  summarise(
+    species_richness = n_distinct(scientificName),
+    .groups = "drop"
+  )
 
 # Calculate species diversity (Simpson Diversity Index)
 library(dplyr)
@@ -116,14 +118,17 @@ simpson_table <- vegetation %>%
     .groups = "drop"
   )
 
-plot_table <- plot_table %>%
-  left_join(simpson_table, by = "siteName") # saves to the plot_table
-
 # Calculate "fractional cover", i.e. proportion of points in each plot that had vegetation
 
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
+  left_join(richness_table, by = "siteName") %>%
+  left_join(simpson_table, by = "siteName")
 
 
 
+# Remove temporary data
+rm(richness_table, simpson_table) 
 ```
 
 
@@ -147,12 +152,12 @@ temperature <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
-## Select data that match plot ID and sitevisit for vegetation
+## Select data that match plot ID and site visit for vegetation
 ```{r}
 library(dplyr)
 
-# Join temperature data into plot_table
-plot_table <- plot_table %>%
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
   left_join(
     temperature %>%
       select(siteName, siteVisitName, 
@@ -162,14 +167,17 @@ plot_table <- plot_table %>%
     by = c("siteName", "siteVisitName")
   )
 
+
+# Remove temporary data
+rm(temperature) 
 ```
 
-## Plot the vagetation and temperature data
+## Plot the vegetation and temperature data
 ```{r}
 library(ggplot2)
 
 # Species richness vs temperature
-ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = species_richness)) +
+ggplot(plot_level_data, aes(x = temperatureAnnualMean_degreeCelsius, y = species_richness)) +
   geom_point(color = "blue", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
   labs(
@@ -178,7 +186,7 @@ ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = species_rich
   theme_minimal()
 
 # Simpson Diversity Index (SDI) vs temperature
-ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
+ggplot(plot_level_data, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
   geom_point(color = "green", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
   labs(
@@ -215,14 +223,17 @@ precipitation <- read.csv(file_path, header = TRUE, fill = TRUE)
 ```{r}
 library(dplyr)
 
-# Join temperature data into plot_table
-plot_table <- plot_table %>%
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
   left_join(
     precipitation %>%
       select(siteName, siteVisitName, 
              precipitationAnnualMean_millimetre),
     by = c("siteName", "siteVisitName")
   )
+
+# Remove temporary data
+rm(precipitation) 
 
 ```
 
@@ -231,7 +242,7 @@ plot_table <- plot_table %>%
 library(ggplot2)
 
 # Species richness vs precipitation
-ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
+ggplot(plot_level_data, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
   geom_point(color = "blue", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
   labs(
@@ -240,7 +251,7 @@ ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = species_richn
   theme_minimal()
 
 # Simpson Diversity Index (SDI) vs precipitation
-ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
+ggplot(plot_level_data, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
   geom_point(color = "green", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
   labs(
@@ -287,18 +298,24 @@ This is an example to access just one file directly. More layers can be added. P
 # }
 # 
 # # Apply to all points
-# plot_table$CLY_0_5cm <- mapply(get_clay_at_point,
-#                                lon = plot_table$longitude_Degree,
-#                                lat = plot_table$latitude_Degree)
+# plot_level_data$CLY_0_5cm <- mapply(get_clay_at_point,
+#                                lon = plot_level_data$longitude_Degree,
+#                                lat = plot_level_data$latitude_Degree)
 # 
-# head(plot_table)
+# head(plot_level_data)
 
 ```
 
 ## From locally saved files
-
-## NOTE: FOR https://portal.tern.org.au/metadata/TERN/482301c2-b9a1-4345-b142-815f9b37890a I.E. WATER CONTEN, WE NEED TO CLARIFY IF IT'S MM OR PERCENT
-## FOR NITROGEN AND PHOSPHORUS WE NEED THE UNIT. BETTER CHECK THE UNITS FOR ALL VARIABLES AND STANDARDISE VARIABLE NAMES. 
+File naming convention is as follows. Please note we are considering only the 0-5cm layer in this example. Models exists for deeper layers.
+SOC = Organic Carbon, i.e.	mass fraction of carbon by weight in the < 2 mm soil material as determined by dry combustion at 900° C 
+CLY =	Clay, i.e.< 2 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SLT = Silt, i.e.	2-20 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SND = Sand, i.e.	20 um - 2 mm mass fraction of the < 2 mm soil material determined using the pipette method 
+PHC = pH - CaCl2, i.e.	pH of 1:5 soil/0.01M calcium chloride extract 
+AWC = Available Water Capacity
+NTO = Total Nitrogen 
+PTO = Total Phosphorus
 ```{r}
 library(terra)
 library(dplyr)
@@ -310,7 +327,7 @@ tif_files <- list.files(data_folder, pattern = "\\.tif$", full.names = TRUE)
 parameters <- unique(substr(basename(tif_files), 1, 3))
 
 # Create a SpatVector of plot locations
-plot_points <- vect(plot_table, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
+plot_points <- vect(plot_level_data, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
 
 # Loop through each parameter
 for (param in parameters) {
@@ -321,30 +338,96 @@ for (param in parameters) {
   # Load rasters
   rasters <- rast(param_files)
   
-  # Extract values at plot locations for all depths (or single raster if only one file)
-  values <- extract(rasters, plot_points)[,-1]  # remove ID column
+  # Extract values at plot locations
+  values <- terra::extract(rasters, plot_points)[,-1]  # remove ID column
   
-  # Add as new column to plot_table
-  plot_table[[param]] <- values
+  # Add as new column to plot_level_data
+  plot_level_data[[param]] <- values
 }
 
 library(dplyr)
 
-plot_table <- plot_table %>%
+# Rename columns
+plot_level_data <- plot_level_data %>%
   rename(
-    availableWaterCapacity_millimetre = AWC,
+    availableWaterCapacity_percentage = AWC,
     clay_percentage = CLY,
-    nitrogen = NTO,
+    nitrogen_percentage = NTO,
     pH = PHC,
-    phosphorus = PTO,
+    phosphorus_percentage = PTO,
     silt_percentage = SLT,
     sand_percentage = SND,
-    organicCarbon = SOC
+    organicCarbon_percentage = SOC
   )
+
+# Remove temporary data
+rm(rasters, plot_points) 
 ```
 
 # create graphs for each variable
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
 
+# Variables of interest
+vars <- c(
+  "availableWaterCapacity_percentage",
+  "clay_percentage",
+  "nitrogen_percentage",
+  "pH",
+  "phosphorus_percentage",
+  "silt_percentage",
+  "sand_percentage",
+  "organicCarbon_percentage"
+)
+
+# Reshape your data from wide to long format
+# You want to plot the same relationship (e.g., species richness vs each soil variable) in a single call to ggplot(), with multiple facets — one facet for each variable. To do that, ggplot2 needs a single column to hold all soil variable values, and another column to indicate which variable they belong to.
+plot_long <- plot_level_data %>%
+  pivot_longer(
+    cols = all_of(vars),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+# Create the plot titles
+plot_long$variable <- factor(plot_long$variable,
+  levels = vars,
+  labels = c(
+    "Available Water Capacity (%)",
+    "Clay (%)",
+    "Nitrogen (%)",
+    "pH",
+    "Phosphorus (%)",
+    "Silt (%)",
+    "Sand (%)",
+    "Organic Carbon (%)"
+  )
+)
+
+# Plot species_richness vs each variable
+ggplot(plot_long, aes(x = value, y = species_richness)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 0.8) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw() +
+  labs(
+    x = "Soil property value",
+    y = "Species richness"
+  )
+
+# Plot SDI vs each variable
+ggplot(plot_long, aes(x = value, y = SDI)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 0.8) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw() +
+  labs(
+    x = "Soil property value",
+    y = "Simpson Diversity Index"
+  )
+```
 
 
 # SOIL - SURVEILLANCE
@@ -372,8 +455,6 @@ plot_table <- plot_table %>%
 # Plant diversity ~ soil + Precip + AirTemp 
 # 
 # Plant density ~ soil + Precip + AirTemp 
-
-##test commit
 
 ```
 ```
