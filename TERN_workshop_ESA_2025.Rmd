@@ -1,11 +1,9 @@
 ---
 title: "TERN_workshop_ESA_2025"
-author: "Elisa"
+author: "Elisa Girola and Eleanor Velasquez"
 date: "2025-09-22"
 output: word_document
 ---
-
-One more testXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -14,13 +12,21 @@ knitr::opts_chunk$set(echo = TRUE)
 # Loading the packages
 ```{r, include=FALSE}
 # Loading the packages ----------------------------------------------------
-
 rm(list=ls()) # cleans the workspace
+
+```
+
+# FOLDER PATH
+For each dataset we are providing both the code to access the files from a locally saved copy and from a remote copy. Remote access is typically slower, but ensures that you are always accessing the latest version of the data. Due to time constraints, during the workshop we will access locally saved data. The code that accesses the data remotely has been commented out. 
+
+The following code specifies the folder path to access data saved locally. You can simply copy and paste your file path here, without the quotation marks. 
+```{r}
+# Select data folder
+data_folder <- rstudioapi::selectDirectory()
+
 ```
 
 
-
-# For each dataset, we'll write code to access from a locally saved file and from a url (e.g. using the R generating code)
 
 # VEGETATION
 
@@ -32,7 +38,14 @@ rm(list=ls()) # cleans the workspace
 
 ## Import the data from a locally saved file
 ```{r}
-vegetation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\Rangeland_PointIntAndVouchering_1a15b96498f911f089bb26ea16246ad1\\data\\csv\\plant-occurrence_data_26ec5224d682b8d0eab19bd53afb0454.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Plant_occurrence.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
@@ -46,17 +59,21 @@ vegetation <- vegetation %>%
 
 ```
 
+# Create a table of plot level data
+```{r}
+# Keep one row per site
+plot_level_data <- vegetation %>%
+  group_by(siteName) %>%
+  slice(1) %>%   # pick the first row per site (they all share the same plot details)
+  ungroup()
+
+```
+
 ## Create a map to show the locations of each plot
 ```{r}
 library(dplyr)
 library(ggplot2)
 library(maps)
-
-# Keep one row per site
-vegetation_sites <- vegetation %>%
-  group_by(siteName) %>%
-  slice(1) %>%   # pick the first row per site (they all share same coords)
-  ungroup()
 
 # Load Australia map
 australia_map <- map_data("world", region = "Australia")
@@ -65,33 +82,30 @@ australia_map <- map_data("world", region = "Australia")
 ggplot() +
   geom_polygon(data = australia_map, aes(x = long, y = lat, group = group),
                fill = "gray90", color = "gray50") +
-  geom_point(data = vegetation_sites,
+  geom_point(data = plot_level_data,
              aes(x = longitude_Degree, y = latitude_Degree),
              color = "darkgreen", size = 2) +
   coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +  # focus on Australia
   theme_minimal() +
-  labs(title = "Vegetation Plot Locations in Australia",
+  labs(title = "Rangeland vegetation plots",
        x = "Longitude", y = "Latitude")
+
+rm(australia_map) # remove temporary tables
 
 ```
 
-
 ## Calculate species richness, species diversity and fractional cover
-## NOTE: WE MAY WANT TO REDOWNLOAD THE DATA INCLUDING THE PARAMETER TAXON. FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON. 
+## NOTE: FOR ROWS THAT HAVE A SUBSPECIES, WE MAY BE ABLE TO EXTRACT THE SPECIES NAME FROM TAXON (TO DO). 
 ```{r}
-
 # Calculate species richness 
 library(dplyr)
 
-plot_table <- vegetation %>%
-  group_by(siteName, latitude_Degree, longitude_Degree, 
-           plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
-           plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate) %>%
-  summarise(species_richness = n_distinct(scientificName), .groups = "drop") %>%
-  select(siteName, latitude_Degree, longitude_Degree, 
-         plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre,
-         plotShape, siteVisitName, siteVisitStartDate, siteVisitEndDate,
-         species_richness)
+richness_table <- vegetation %>%
+  group_by(siteName) %>%
+  summarise(
+    species_richness = n_distinct(scientificName),
+    .groups = "drop"
+  )
 
 # Calculate species diversity (Simpson Diversity Index)
 library(dplyr)
@@ -104,14 +118,17 @@ simpson_table <- vegetation %>%
     .groups = "drop"
   )
 
-plot_table <- plot_table %>%
-  left_join(simpson_table, by = "siteName") # saves to the plot_table
-
 # Calculate "fractional cover", i.e. proportion of points in each plot that had vegetation
 
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
+  left_join(richness_table, by = "siteName") %>%
+  left_join(simpson_table, by = "siteName")
 
 
 
+# Remove temporary data
+rm(richness_table, simpson_table) 
 ```
 
 
@@ -124,16 +141,23 @@ plot_table <- plot_table %>%
 
 ## Import the data from a locally saved file
 ```{r}
-temperature<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Temperature_15649682977911f09e3f26ea16246ad1\\Temperature_15649682977911f09e3f26ea16246ad1\\data\\csv\\weather_data_091e6bfe7d81bff49fc08251b743e2cc.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Temperature.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+temperature <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
-## Select data that match plot ID and sitevisit for vegetation
+## Select data that match plot ID and site visit for vegetation
 ```{r}
 library(dplyr)
 
-# Join temperature data into plot_table
-plot_table <- plot_table %>%
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
   left_join(
     temperature %>%
       select(siteName, siteVisitName, 
@@ -143,14 +167,17 @@ plot_table <- plot_table %>%
     by = c("siteName", "siteVisitName")
   )
 
+
+# Remove temporary data
+rm(temperature) 
 ```
 
-## Plot the vagetation and temperature data
+## Plot the vegetation and temperature data
 ```{r}
 library(ggplot2)
 
 # Species richness vs temperature
-ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = species_richness)) +
+ggplot(plot_level_data, aes(x = temperatureAnnualMean_degreeCelsius, y = species_richness)) +
   geom_point(color = "blue", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
   labs(
@@ -159,7 +186,7 @@ ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = species_rich
   theme_minimal()
 
 # Simpson Diversity Index (SDI) vs temperature
-ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
+ggplot(plot_level_data, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
   geom_point(color = "green", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
   labs(
@@ -181,7 +208,14 @@ ggplot(plot_table, aes(x = temperatureAnnualMean_degreeCelsius, y = SDI)) +
 
 ## Import the data from a locally saved file
 ```{r}
-precipitation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\ESA\\ESA 2025\\Precipitation_dabcf7bfa7f911f09d2526ea16246ad1\\data\\csv\\weather_data_e1f82ca1c440bdc1a664bb0242f085c4.csv", header=TRUE, fill = TRUE) #  imports the file with the data
+# File name
+file_name <- "Precipitation.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+precipitation <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 ```
 
@@ -189,8 +223,8 @@ precipitation<-read.csv ("C:\\Users\\uqegirol\\Desktop\\Documents\\Conferences\\
 ```{r}
 library(dplyr)
 
-# Join temperature data into plot_table
-plot_table <- plot_table %>%
+# Join data into main dataframe
+plot_level_data <- plot_level_data %>%
   left_join(
     precipitation %>%
       select(siteName, siteVisitName, 
@@ -198,14 +232,17 @@ plot_table <- plot_table %>%
     by = c("siteName", "siteVisitName")
   )
 
+# Remove temporary data
+rm(precipitation) 
+
 ```
 
-## Plot the vagetation and precipitation data
+## Plot the vegetation and precipitation data
 ```{r}
 library(ggplot2)
 
 # Species richness vs precipitation
-ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
+ggplot(plot_level_data, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
   geom_point(color = "blue", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
   labs(
@@ -214,7 +251,7 @@ ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = species_richn
   theme_minimal()
 
 # Simpson Diversity Index (SDI) vs precipitation
-ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
+ggplot(plot_level_data, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
   geom_point(color = "green", size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "darkgreen") +
   labs(
@@ -222,27 +259,75 @@ ggplot(plot_table, aes(x = precipitationAnnualMean_millimetre, y = SDI)) +
     y = "Simpson Diversity Index (SDI)") +
   theme_minimal()
 
-
 ```
 
 # SOIL - LANDSCAPE
-## From locally saved files
+## Access data directly from WCS
+This is an example to access just one file directly. More layers can be added. Please note each layer requires several minutes to run. 
+```{r}
+# library(terra)
+# 
+# # WCS endpoint and layer
+# base_url <- "https://geoserver.tern.org.au/geoserver/slga/CLY_v2/wcs"
+# layer <- "slga__cly_ev_n_p_au_trn_n_20210902"
+# 
+# # Small buffer around each point (0.01 degrees ~1 km)
+# buffer <- 0.01
+# 
+# # Function to get clay value at a single point
+# get_clay_at_point <- function(lon, lat) {
+#   xmin <- lon - buffer
+#   xmax <- lon + buffer
+#   ymin <- lat - buffer
+#   ymax <- lat + buffer
+#   
+#   getcov <- paste0(
+#     base_url,
+#     "?service=WCS&version=2.0.1&request=GetCoverage",
+#     "&coverageId=", layer,
+#     "&format=image/geotiff",
+#     "&subset=Long(", xmin, ",", xmax, ")",
+#     "&subset=Lat(", ymin, ",", ymax, ")"
+#   )
+#   
+#   # Download tiny raster
+#   r <- rast(getcov)
+#   
+#   # Extract value at the exact point
+#   extract(r, vect(data.frame(lon=lon, lat=lat), geom=c("lon","lat"), crs="EPSG:4326"))[,2]
+# }
+# 
+# # Apply to all points
+# plot_level_data$CLY_0_5cm <- mapply(get_clay_at_point,
+#                                lon = plot_level_data$longitude_Degree,
+#                                lat = plot_level_data$latitude_Degree)
+# 
+# head(plot_level_data)
 
+```
+
+## From locally saved files
+File naming convention is as follows. Please note we are considering only the 0-5cm layer in this example. Models exists for deeper layers.
+SOC = Organic Carbon, i.e.	mass fraction of carbon by weight in the < 2 mm soil material as determined by dry combustion at 900° C 
+CLY =	Clay, i.e.< 2 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SLT = Silt, i.e.	2-20 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SND = Sand, i.e.	20 um - 2 mm mass fraction of the < 2 mm soil material determined using the pipette method 
+PHC = pH - CaCl2, i.e.	pH of 1:5 soil/0.01M calcium chloride extract 
+AWC = Available Water Capacity
+NTO = Total Nitrogen 
+PTO = Total Phosphorus
 ```{r}
 library(terra)
 library(dplyr)
 
-# Folder with soil .tif files
-soil_folder <- "C:/Users/uqegirol/Desktop/Documents/Conferences/ESA/ESA 2025/Soil"
-
-# List all .tif files
-tif_files <- list.files(soil_folder, pattern = "\\.tif$", full.names = TRUE)
+# List all .tif files in the folder
+tif_files <- list.files(data_folder, pattern = "\\.tif$", full.names = TRUE)
 
 # Extract unique parameters from file names (first 3 letters)
 parameters <- unique(substr(basename(tif_files), 1, 3))
 
 # Create a SpatVector of plot locations
-plot_points <- vect(plot_table, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
+plot_points <- vect(plot_level_data, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
 
 # Loop through each parameter
 for (param in parameters) {
@@ -253,36 +338,95 @@ for (param in parameters) {
   # Load rasters
   rasters <- rast(param_files)
   
-  # Extract values at plot locations for all depths
-  values_all_depths <- extract(rasters, plot_points)[,-1]  # remove ID column
+  # Extract values at plot locations
+  values <- terra::extract(rasters, plot_points)[,-1]  # remove ID column
   
-  # Calculate mean across depths
-  values_mean <- rowMeans(values_all_depths, na.rm = TRUE)
-  
-  # Add as new column to plot_table
-  plot_table[[param]] <- values_mean
+  # Add as new column to plot_level_data
+  plot_level_data[[param]] <- values
 }
 
+library(dplyr)
 
-# Percentage silt 
+# Rename columns
+plot_level_data <- plot_level_data %>%
+  rename(
+    availableWaterCapacity_percentage = AWC,
+    clay_percentage = CLY,
+    nitrogen_percentage = NTO,
+    pH = PHC,
+    phosphorus_percentage = PTO,
+    silt_percentage = SLT,
+    sand_percentage = SND,
+    organicCarbon_percentage = SOC
+  )
 
-# Percentage clay 
-
-# Percentage sand 
-# 
-# Nitrogen 
-# 
-# Phosphorus 
-# 
-# Soil pH 
-# 
-# Organic matter content 
-# 
-# Soil moisture 
+# Remove temporary data
+rm(rasters, plot_points) 
 ```
 
 # create graphs for each variable
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
 
+# Variables of interest
+vars <- c(
+  "availableWaterCapacity_percentage",
+  "clay_percentage",
+  "nitrogen_percentage",
+  "pH",
+  "phosphorus_percentage",
+  "silt_percentage",
+  "sand_percentage",
+  "organicCarbon_percentage"
+)
+
+# Reshape your data from wide to long format
+# You want to plot the same relationship (e.g., species richness vs each soil variable) in a single call to ggplot(), with multiple facets — one facet for each variable. To do that, ggplot2 needs a single column to hold all soil variable values, and another column to indicate which variable they belong to.
+plot_long <- plot_level_data %>%
+  pivot_longer(
+    cols = all_of(vars),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+# Create the plot titles
+plot_long$variable <- factor(plot_long$variable,
+  levels = vars,
+  labels = c(
+    "Available Water Capacity (%)",
+    "Clay (%)",
+    "Nitrogen (%)",
+    "pH",
+    "Phosphorus (%)",
+    "Silt (%)",
+    "Sand (%)",
+    "Organic Carbon (%)"
+  )
+)
+
+# Plot species_richness vs each variable
+ggplot(plot_long, aes(x = value, y = species_richness)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 0.8) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw() +
+  labs(
+    x = "Soil property value",
+    y = "Species richness"
+  )
+
+# Plot SDI vs each variable
+ggplot(plot_long, aes(x = value, y = SDI)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 0.8) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw() +
+  labs(
+    x = "Soil property value",
+    y = "Simpson Diversity Index"
+  )
 ```
 
 
@@ -311,8 +455,6 @@ for (param in parameters) {
 # Plant diversity ~ soil + Precip + AirTemp 
 # 
 # Plant density ~ soil + Precip + AirTemp 
-
-##test commit
 
 ```
 ```
