@@ -6,7 +6,8 @@ output: word_document
 editor_options: 
   chunk_output_type: inline
 ---
-#note for some reason this chunk tries to open python in my Rstudio - chat gpt did suggest some ways to fix it - it's very weird!
+#note for some reason this chunk tries to open python in my Rstudio?
+#Figured out why - need to set working directory first before this step - can we add this in?
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -22,6 +23,7 @@ rm(list=ls()) # cleans the workspace
 For each dataset we are providing both the code to access the files from a locally saved copy and from a remote copy. Remote access is typically slower, but ensures that you are always accessing the latest version of the data. Due to time constraints, during the workshop we will access locally saved data. The code that accesses the data remotely has been commented out. 
 
 The following code specifies the folder path to access data saved locally. You can simply copy and paste your file path here, without the quotation marks. 
+#note put this before the command/chunk to knitR or there is a warning / error message.
 ```{r}
 # Select data folder
 data_folder <- rstudioapi::selectDirectory()
@@ -52,6 +54,7 @@ vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 ```
 
 ## For sites that have multiple site visits keep only the latest one
+#should we comment our justification in here just briefly?
 ```{r}
 library(dplyr)
 vegetation <- vegetation %>%
@@ -71,7 +74,7 @@ plot_level_data <- vegetation %>%
 
 ```
 
-## Create a map to show the locations of each plot
+## Create a map to show the locations of each plot for the rangelands dataset
 ```{r}
 library(dplyr)
 library(ggplot2)
@@ -460,7 +463,7 @@ library(performance)
 
 #Hold on! There is a very important step we need to do first. Because our preditor variables are on different scales e.g., percentages for soil covariates, soil pH, degrees celsius (max, min and annual mean), precipitation (mm). This means we need to scale or 'centre' these variables so that they can be compared easily between models.
 IMPORTANT : we are NOT centring site/visit IDs or dates.
-Those are handled by the GLMM random effects later (partitioning by site / date).
+If we do a GLMM random effects this is handled by partitioning by site / date.
 
 #centre the predictors!
 
@@ -732,69 +735,7 @@ print(out, row.names = FALSE)
 
 ```
 
-# sand and clay are highly negatively correlated. So we will have to drop one. We could keep one or we can create a PCA - let's see how it goes.
-## Note for Elisa: thinking not to do this - as it's so hard to interpret the model with the PCA included. But it was an interesting idea.Unless you have further thoghts let's drop this part.
-
-The below code compresses the trio (sand, silt, clay)—which are highly redundant—into one axis that captures the main texture gradient.
-
-Loadings tell the story: the numbers printed under pc1_loadings show how PC1 changes with each component.
-
-e.g., if clay has a positive loading and sand a negative loading, higher PC1 means “more clay / less sand” (the sign can flip depending on the PCA; flipping the sign doesn’t change the meaning).
-
-Use in models: plug Texture_PC1_z into your correlations/VIFs/GLMM instead of including sand/silt/clay separately. This removes the multicollinearity while keeping the texture signal.
-
-#Creating a PCA
-
-```{r}
-# --- PCA on soil texture (%): create Texture_PC1 and a centred Texture_PC1_z ---
-
-# 1) grab the three composition columns
-
-tex_vars <- c("sand_percentage", "silt_percentage", "clay_percentage")
-
-# silently keep only those that exist
-
-tex_vars <- intersect(tex_vars, names(plot_level_data))
-
-# quick safety: need all three to run a texture PCA
-
-if (length(tex_vars) != 3) {
-stop("Texture PCA needs sand_percentage, silt_percentage, and clay_percentage in plot_level_data.")
-}
-
-# 2) build a small matrix and keep complete rows
-
-tex_mat <- as.data.frame(plot_level_data[tex_vars])
-
-# coerce to numeric just in case
-
-tex_mat[] <- lapply(tex_mat, function(x) suppressWarnings(as.numeric(x)))
-
-ok <- stats::complete.cases(tex_mat)
-
-# 3) PCA (standardised) on the complete cases
-
-tex_pca <- prcomp(tex_mat[ok, ], scale. = TRUE)  # scale.=TRUE standardises variables
-
-# 4) attach PC1 scores back to the full data (NA where any of the three were missing)
-
-plot_level_data$Texture_PC1 <- NA_real_
-plot_level_data$Texture_PC1[ok] <- tex_pca$x[, 1]
-
-# 5) also create a z-centred PC1 for use in models
-
-plot_level_data$Texture_PC1_z <- as.numeric(scale(plot_level_data$Texture_PC1))
-
-# 6) handy readouts 
-
-pc1_var_explained <- summary(tex_pca)$importance["Proportion of Variance", 1] * 100
-pc1_loadings      <- tex_pca$rotation[, 1]
-
-cat(sprintf("Texture PC1 explains ~%.1f%% of variance in (sand, silt, clay).\n", pc1_var_explained))
-print(round(pc1_loadings, 3))
-
-```
-
+# sand and clay are highly negatively correlated. So we will have to drop one. 
 # Fantastic - We are ready to create our models
 
 #We only have 1 visit per site across 785 sites so the GLMM random intercept will partition the data by site name: (1 | siteName)
@@ -1239,8 +1180,23 @@ cat("\n=== SDI ~ SAND MODEL ===\n")
 summary(m_SDI_sand)
 
 # Diagnostics
-par(mfrow = c(2, 2))
-plot(m_SDI_sand, which = c(1, 4, 5))  # Skip unavailable plots
+# === DIAGNOSTICS FOR SDI ~ SAND (extended-support betareg) ===
+par(mfrow = c(1, 2))
+
+# 1) Residuals vs fitted (RQ residuals)
+rq  <- residuals(m_SDI_sand, type = "quantile")
+fit <- fitted(m_SDI_sand)
+plot(fit, rq,
+     xlab = "Fitted values",
+     ylab = "Randomized-quantile residuals",
+     main = "Residuals vs Fitted")
+abline(h = 0, lty = 2, col = "grey40")
+
+# 2) QQ plot of RQ residuals
+qqnorm(rq, main = "QQ plot (RQ residuals)")
+qqline(rq, col = "grey40", lty = 2)
+
+
 
 # Pearson residuals QQ plot
 par(mfrow = c(1, 1))
