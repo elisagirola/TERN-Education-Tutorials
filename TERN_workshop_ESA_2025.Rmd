@@ -1085,6 +1085,7 @@ cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richnes
 
 ```
 #now the SDI (simpson's diversity index) models
+### testing
 
 ```{r}
 
