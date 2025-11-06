@@ -6,8 +6,7 @@ output: word_document
 editor_options: 
   chunk_output_type: inline
 ---
-#note for some reason this chunk tries to open python in my Rstudio?
-#Figured out why - need to set working directory first before this step - can we add this in?
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -54,7 +53,7 @@ vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 ```
 
 ## For sites that have multiple site visits keep only the latest one
-#should we comment our justification in here just briefly?
+#should we comment our justification in here just briefly? yes - let's do that - definitely
 ```{r}
 library(dplyr)
 vegetation <- vegetation %>%
@@ -678,7 +677,7 @@ mar = c(0,0,1,0)
 
 #Which predictors to remove? Here is where our knowledge of plant ecosystems comes into play
 As clay and silt are highly positively correlated (0.93), while sand and silt are highly negatively correlated (-0.99)
-Let's remove silt and run separate modles with sand and clay separately as they may have interesting effects on plant richness.
+Let's remove silt and run separate models with sand and clay separately as they may have interesting effects on plant richness.
 
 Temperature values are also (logically) correlated. As temp annual mean is correlated with both temp maxiumum and temp minimum - let's remove the average temp.
 
@@ -744,7 +743,7 @@ print(out, row.names = FALSE)
  
 # Fantastic - We are ready to create our models
 
-#We only have 1 visit per site across 785 sites so we do not need to use a GLMM and partition the site visits using random effecte e.g., (1 | siteName)
+#We only have 1 visit per site across 785 sites so we do not need to use a GLMM and partition the site visits using random effect e.g., (1 | siteName)
 
 Therefore, we use a standard GLM (Generalized Linear Model) with appropriate
 distribution families to handle our response variables.
@@ -832,6 +831,7 @@ needed <- c(
 "precipitationAnnualMean_millimetre_z",
 "availableWaterCapacity_percentage_z",
 "clay_percentage_z",
+"sand_percentage_z",
 "nitrogen_percentage_z",
 "pH_z",
 "phosphorus_percentage_z"
@@ -888,7 +888,7 @@ summary(m_rich_clay)
 ```
 ```{r}
 
-# Check for overdispersion
+# Check for overdispersion and model fit
 cat("Dispersion parameter (theta):", m_rich_clay$theta, "\n")
 
 # Model diagnostics
@@ -908,7 +908,7 @@ testDispersion(sim_clay)
 testZeroInflation(sim_clay)
 
 ```
-
+#model fit is fairly good
 #wow some interesting results for the clay model - what is your interpretation? We'd love to hear it.
 
 ##ECOLOGICAL STORY TO BE DELETED FROM WORKSHOP VERSION##
@@ -965,7 +965,7 @@ Nitrogen (p = 0.61): No effect
 Sand/Silt (not in model - excluded due to collinearity with clay)
 
 
-#let's check species richness against the same glm but with sand substiuted for clay
+#let's check species richness against the same glm but with sand substiuted for sand
 
 ```{r}
 
@@ -995,7 +995,7 @@ m_rich_sand <- glm.nb(
     maximumTemperature_degreeCelsius_z +
     precipitationAnnualMean_millimetre_z +
     availableWaterCapacity_percentage_z +
-    sand_percentage_z +  # SAND instead of clay
+    sand_percentage_z +  
     nitrogen_percentage_z +
     pH_z +
     phosphorus_percentage_z,
@@ -1032,18 +1032,18 @@ testZeroInflation(sim_sand)
 ```
 
 
-#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage = higher diversity. Both models are essentially equivalent in explanatory power.
+#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage + more available nutrients = higher diversity. Both models are essentially equivalent in explanatory power.
 
 #Ecological Story
-Your rangeland diversity is maximized in:
+rangeland species richness is maximized in:
 
-Sandier soils (better drainage, aeration)
+Sandier soils (better drainage, aeration, + likely more available nutrients)
 Warmer minimum temps (less cold stress)
 Cooler maximum temps (less heat stress)
 More acidic pH (lower pH values)
 Lower phosphorus (possibly reduced competitive dominance)
 
-Recommendation: Since sand and clay are just mirror images of the same gradient, I'd suggest picking one model (probably sand, since it has slightly lower AIC and phosphorus becomes significant). You could also mention in your write-up that "clay showed the opposite pattern (β = -0.044, p = 0.006), as expected given the negative correlation between sand and clay content."
+Since sand and clay are just mirror images of the same gradient, possibly pick one model (probably sand, since it has slightly lower AIC and phosphorus becomes significant). 
 
 #Pick the best model / model selection for species richness
 
@@ -1061,7 +1061,7 @@ cat("Choosing SAND model (marginally lower AIC, clearer P effect).\n")
 cat("Clay shows inverse pattern as expected (r = -0.XX between sand/clay).\n")
 
 ```
-#summary## - Elisa should we delete - I feel in the interests of time probably delete? I'm easy
+#summary## - Elisa should we delete - I feel in the interests of time probably delete? 
 
 ```{r}
 # ============================================================================
@@ -1129,7 +1129,7 @@ summary(m_SDI_clay)
 
 
 ```
-#test model fit
+#check model fit
 
 ```{r}
 # Diagnostics
@@ -1186,6 +1186,8 @@ m_SDI_clay_phi <- betareg(
   data = plot_level_data
 )
 
+summary(m_SDI_clay_phi)
+
 AIC(m_SDI_clay, m_SDI_clay_phi)
 
 ```
@@ -1221,8 +1223,6 @@ AIC(m_SDI_clay, m_SDI_clay_phi)
 
 ```
 
-
-
 #let's check the model summary table for this better phi model
 
 ```{r}
@@ -1230,8 +1230,6 @@ AIC(m_SDI_clay, m_SDI_clay_phi)
 s <- summary(m_SDI_clay_phi)
 s  # full console summary (includes pseudo R^2, logLik, etc.)
 cat("Pseudo R^2 (McFadden):", round(s$pseudo.r.squared, 3), "\n")
-
-
 ```
 
 #SDI ~ clay predictors model interpretation:
@@ -1313,7 +1311,7 @@ AIC(m_SDI_sand, m_SDI_sand_phi)
 
 
 ```
-#which one to keep
+#which one to keep?
 ΔAIC ≈ 29 (–827.4 vs –798.0) → the variable-precision - phi model fits much better.
 
 Likelihood ratio test: χ² = 33.37, df = 2, p < 0.001 → highly significant improvement.
@@ -1384,243 +1382,98 @@ Once species are established, temperature extremes control community evenness: w
 Hotter conditions increase the variability of SDI across sites, suggesting that heat stress not only lowers evenness on average but also makes community structure less predictable.
 
 
-#let's create a summary table of all 4 models
+#let's create a summary plot of all 4 models
 
 ```{r}
-# === Coefficient plots for: m_rich_sand, m_rich_clay, m_SDI_sand_phi, m_SDI_clay_phi ===
-
-# Packages
-library(dplyr)
-library(tibble)
-library(stringr)
+# === Clean coefficient plotting (robust; handles betareg + NB; no Log(nu)) ==
 library(ggplot2)
+library(dplyr)
+library(stringr)
 
-# --- helper: get mean-submodel coefs with robust fallbacks -----------------
-tidy_mean_coefs <- function(model, model_name) {
-  # 1) Try broom first (handles betareg + glm.nb nicely)
-  if (requireNamespace("broom", quietly = TRUE)) {
-    # betareg needs component="mean"; others ignore it safely
-    td <- tryCatch(
-      broom::tidy(model, component = "mean"),
-      error = function(e) NULL
-    )
-    if (!is.null(td) && all(c("term", "estimate") %in% names(td))) {
-      # prefer std.error if present; if not, try conf.low/conf.high else NA
-      if (!("std.error" %in% names(td))) {
-        if (all(c("conf.low", "conf.high") %in% names(td))) {
-          td <- td %>%
-            mutate(
-              se = (conf.high - conf.low) / (2 * 1.96),
-              lower = conf.low,
-              upper = conf.high
-            )
-        } else {
-          td$se <- NA_real_
-        }
-      } else {
-        td <- td %>% mutate(lower = estimate - 1.96 * std.error,
-                            upper = estimate + 1.96 * std.error,
-                            se    = std.error)
-      }
-      out <- td %>%
-        filter(term != "(Intercept)") %>%
-        transmute(model = model_name,
-                  term,
-                  estimate,
-                  se,
-                  lower,
-                  upper)
-      out$term <- out$term %>% str_replace("_z$", "") %>% str_replace_all("_", " ")
-      return(out)
-    }
-  }
-
-  # 2) Manual extraction if broom isn't available / failed
+.extract_coef_table <- function(model) {
+  # Returns a data.frame with columns: term, estimate, se
   if (inherits(model, "betareg")) {
-    cf <- summary(model)$coefficients$mean
-  } else if (inherits(model, "negbin")) {
-    cf <- summary(model)$coefficients
-  } else {
-    stop(sprintf("Unsupported model class for %s: %s",
-                 model_name, paste(class(model), collapse = "/")))
-  }
-
-  df <- as.data.frame(cf) %>% rownames_to_column("term")
-
-  # Try to detect estimate & SE even with weird labels (e.g., robust SEs)
-  cn_raw <- names(df)
-  cn_clean <- tolower(gsub("[^a-z]", "", cn_raw))  # strip spaces, dots, () etc.
-
-  # Find columns by cleaned names
-  est_idx <- which(cn_clean %in% c("estimate", "coef", "coefficient"))[1]
-  se_idx  <- which(cn_clean %in% c("stderror","se","robustse","stderrorrobust"))[1]
-
-  # If still missing, guess by position: first two numeric columns
-  if (is.na(est_idx) || is.na(se_idx)) {
-    num_cols <- which(vapply(df, is.numeric, logical(1)))
-    if (length(num_cols) >= 2) {
-      if (is.na(est_idx)) est_idx <- num_cols[1]
-      if (is.na(se_idx))  se_idx  <- num_cols[2]
+    # 1) Try broom tidy (mean component only)
+    td <- try({
+      if (requireNamespace("broom", quietly = TRUE)) {
+        broom::tidy(model, component = "mean", conf.int = FALSE)
+      } else NULL
+    }, silent = TRUE)
+    if (inherits(td, "data.frame") && all(c("term","estimate","std.error") %in% names(td))) {
+      return(td |>
+               dplyr::transmute(term, estimate, se = std.error))
     }
+
+    # 2) Fall back to summary() mean block
+    sm <- summary(model)
+    cf <- try(sm$coefficients$mean, silent = TRUE)
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical names: "Estimate", "Std. Error", "z value", "Pr(>|z|)"
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (!is.na(est_col) && !is.na(se_col)) {
+        df$term <- rownames(df); rownames(df) <- NULL
+        return(df |>
+                 dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+      }
+    }
+
+    # 3) Last resort: use coef() + vcov() for mean submodel
+    est_vec <- try(coef(model)[["mean"]], silent = TRUE)
+    if (inherits(est_vec, "numeric")) {
+      vc  <- try(vcov(model, model = "mean"), silent = TRUE)
+      se_vec <- if (inherits(vc, "matrix")) sqrt(diag(vc)) else NA_real_
+      df <- data.frame(term = names(est_vec), estimate = as.numeric(est_vec), se = as.numeric(se_vec))
+      return(df)
+    }
+
+    stop("Could not extract coefficients for betareg model.")
   }
 
-  if (is.na(est_idx) || is.na(se_idx)) {
-    stop("Couldn't find Estimate/Std. Error columns.")
+  # MASS::glm.nb and similar
+  if ("negbin" %in% class(model)) {
+    sm <- summary(model)
+    cf <- sm$coefficients
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical colnames: "Estimate", "Std. Error", ...
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (is.na(est_col) || is.na(se_col)) {
+        # Fallback to first two numeric columns
+        num_idx <- which(vapply(df, is.numeric, logical(1)))
+        if (length(num_idx) >= 2) {
+          est_col <- names(df)[num_idx[1]]
+          se_col  <- names(df)[num_idx[2]]
+        }
+      }
+      df$term <- rownames(df); rownames(df) <- NULL
+      return(df |>
+               dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+    }
+    stop("Could not extract coefficients for glm.nb model.")
   }
 
-  est_col <- cn_raw[est_idx]
-  se_col  <- cn_raw[se_idx]
-
-  out <- df %>%
-    filter(term != "(Intercept)") %>%
-    transmute(
-      model    = model_name,
-      term     = term,
-      estimate = .data[[est_col]],
-      se       = .data[[se_col]],
-      lower    = estimate - 1.96 * se,
-      upper    = estimate + 1.96 * se
-    )
-
-  out$term <- out$term %>% str_replace("_z$", "") %>% str_replace_all("_", " ")
-  out
+  stop(sprintf("Unsupported model class: %s", paste(class(model), collapse = "/")))
 }
 
 one_coef_plot <- function(model, model_name, title = NULL) {
-  dat <- tidy_mean_coefs(model, model_name)
-  aic_val <- tryCatch(round(AIC(model), 1), error = function(e) NA_real_)
+  # --- extract --------------------------------------------------------------
+  df <- .extract_coef_table(model)
 
-  dat <- dat %>% mutate(order = reorder(term, abs(estimate)))
-
-  g <- ggplot(dat, aes(x = order, y = estimate)) +
-    geom_hline(yintercept = 0, linetype = 2) +
-    geom_pointrange(aes(ymin = lower, ymax = upper)) +
-    coord_flip(clip = "off") +
-    labs(
-      x = NULL,
-      y = "Coefficient (±95% CI)",
-      title = if (is.null(title)) model_name else title,
-      subtitle = if (!is.na(aic_val)) paste0("AIC: ", aic_val) else NULL
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(plot.title = element_text(face = "bold"),
-          plot.margin = margin(10, 20, 10, 10))
-  g
-}
-
-# --- Your models -----------------------------------------------------------
-# SR (richness) ~ sand/clay   -> likely MASS::glm.nb (class "negbin")
-# SDI ~ sand/clay (beta)      -> betareg with phi formula (class "betareg")
-models <- list(
-  "SR ~ sand (NB)"    = m_rich_sand,
-  "SR ~ clay (NB)"    = m_rich_clay,
-  "SDI ~ sand (beta)" = m_SDI_sand_phi,
-  "SDI ~ clay (beta)" = m_SDI_clay_phi
-)
-
-# Build & show plots
-plots <- lapply(names(models), function(nm) one_coef_plot(models[[nm]], nm))
-
-if (requireNamespace("patchwork", quietly = TRUE)) {
-  combined <- (plots[[1]] | plots[[2]]) / (plots[[3]] | plots[[4]])
-  print(combined)
-} else if (requireNamespace("gridExtra", quietly = TRUE)) {
-  gridExtra::grid.arrange(grobs = plots, ncol = 2)
-} else {
-  for (p in plots) print(p)
-}
-
-
-
-```
-#graph the model coefficients
-##there is an error in this code as it's adding a spare term - which I need to fix... siigghh  almost there.
-
-```{r}
-# === Coefficient plots for final models (printed one by one) ===============
-
-library(ggplot2)
-library(stringr)
-
-# --- helper (robust; uses broom first, then falls back) --------------------
-tidy_mean_coefs <- function(model, model_name) {
-  # 1) Prefer broom with 95% CI (works for betareg + glm.nb)
-  if (requireNamespace("broom", quietly = TRUE)) {
-    td <- tryCatch(
-      broom::tidy(model, component = "mean", conf.int = TRUE, conf.level = 0.95),
-      error = function(e) NULL
-    )
-    if (!is.null(td) && all(c("term", "estimate") %in% names(td))) {
-      # Ensure we have se, lower, upper
-      if (!("std.error" %in% names(td))) td$std.error <- NA_real_
-      if (!("conf.low" %in% names(td)))  td$conf.low  <- td$estimate - 1.96 * td$std.error
-      if (!("conf.high" %in% names(td))) td$conf.high <- td$estimate + 1.96 * td$std.error
-
-      out <- td |>
-        dplyr::filter(term != "(Intercept)") |>
-        dplyr::mutate(
-          se    = std.error,
-          lower = conf.low,
-          upper = conf.high
-        ) |>
-        dplyr::select(term, estimate, se, lower, upper)
-      out$model <- model_name
-      out$term  <- out$term |>
+  dat <- df |>
+    dplyr::filter(term != "(Intercept)") |>
+    # Belt-and-braces: drop any auxiliary/precision/nu rows
+    dplyr::filter(!stringr::str_detect(term, "(?i)log\\((nu|phi)\\)|^nu$|^phi$|precision")) |>
+    dplyr::mutate(
+      lower = estimate - 1.96 * se,
+      upper = estimate + 1.96 * se,
+      term  = term |>
         stringr::str_replace("_z$", "") |>
         stringr::str_replace_all("_", " ")
-      return(out)
-    }
-  }
-
-  # 2) Fallback manual route
-  if (inherits(model, "betareg")) {
-    cf <- summary(model)$coefficients$mean
-  } else if ("negbin" %in% class(model)) {
-    cf <- summary(model)$coefficients
-  } else {
-    stop(sprintf("Unsupported model class for %s: %s", model_name, paste(class(model), collapse = "/")))
-  }
-
-  df <- as.data.frame(cf)
-  df$term <- rownames(df); rownames(df) <- NULL
-
-  # try to find estimate & SE columns flexibly
-  cn_raw   <- names(df)
-  cn_clean <- tolower(gsub("[^a-z]", "", cn_raw))
-  est_idx  <- which(cn_clean %in% c("estimate","coef","coefficient"))[1]
-  se_idx   <- which(cn_clean %in% c("stderror","se","robustse","stderrorrobust"))[1]
-
-  if (is.na(est_idx) || is.na(se_idx)) {
-    num_cols <- which(vapply(df, is.numeric, logical(1)))
-    if (length(num_cols) >= 2) {
-      if (is.na(est_idx)) est_idx <- num_cols[1]
-      if (is.na(se_idx))  se_idx  <- num_cols[2]
-    }
-  }
-  if (is.na(est_idx) || is.na(se_idx)) stop("Couldn't find Estimate/Std. Error columns.")
-
-  est_col <- cn_raw[est_idx]
-  se_col  <- cn_raw[se_idx]
-
-  out <- df |>
-    dplyr::filter(term != "(Intercept)") |>
-    dplyr::transmute(
-      model    = model_name,
-      term     = term,
-      estimate = .data[[est_col]],
-      se       = .data[[se_col]],
-      lower    = estimate - 1.96 * se,
-      upper    = estimate + 1.96 * se
     )
-  out$term <- out$term |>
-    stringr::str_replace("_z$", "") |>
-    stringr::str_replace_all("_", " ")
-  out
-}
 
-# --- plotting helper -------------------------------------------------------
-one_coef_plot <- function(model, model_name, title = NULL) {
-  dat <- tidy_mean_coefs(model, model_name)
   aic_val <- tryCatch(round(AIC(model), 1), error = function(e) NA_real_)
 
   ggplot(dat, aes(x = reorder(term, abs(estimate)), y = estimate)) +
@@ -1628,8 +1481,7 @@ one_coef_plot <- function(model, model_name, title = NULL) {
     geom_pointrange(aes(ymin = lower, ymax = upper)) +
     coord_flip() +
     labs(
-      x = NULL,
-      y = "Coefficient (±95% CI)",
+      x = NULL, y = "Coefficient (±95% CI)",
       title = if (is.null(title)) model_name else title,
       subtitle = if (!is.na(aic_val)) paste0("AIC: ", aic_val) else NULL
     ) +
@@ -1638,7 +1490,7 @@ one_coef_plot <- function(model, model_name, title = NULL) {
           plot.margin = margin(10, 20, 10, 10))
 }
 
-# --- your four models ------------------------------------------------------
+# --- your models -----------------------------------------------------------
 models <- list(
   "SR ~ sand (NB)"    = m_rich_sand,
   "SR ~ clay (NB)"    = m_rich_clay,
@@ -1646,13 +1498,11 @@ models <- list(
   "SDI ~ clay (beta)" = m_SDI_clay_phi
 )
 
-# --- print plots individually ----------------------------------------------
+# --- print plots -----------------------------------------------------------
 for (nm in names(models)) {
   print(one_coef_plot(models[[nm]], nm))
 }
 
-
 ```
-
 
 
