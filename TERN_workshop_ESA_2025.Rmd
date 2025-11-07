@@ -470,9 +470,9 @@ If we do a GLMM random effects this is handled by partitioning by site / date.
 ```{r}
 
 #let's centre the predictors
-#I like to see the headers so I can know which collumns I want to work with for my key predictions (this is done for you below - but if you were working with fresh data - it's a handy command).
+#I like to see the headers so I can know which columns I want to work with for my key predictions (this is done for you below - but if you were working with fresh data - it's a handy command).
 
-#first inspect the collumn headers
+#first inspect the column headers
 head(plot_level_data)
 
 ```
@@ -599,7 +599,7 @@ message("Not enough centred predictors found to compute a correlation matrix (ne
 ```
 
 
-#fantastic - we can see there is some colliearity between predictors we expected e.g., temperatures / soil sand / silt clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. EG if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
+#fantastic - we can see there is some colliearity between predictors we expected e.g., temperatures / soil sand / silt clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. E.g., if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
 
 #let's visualise the correlations between predictors so it's easier to determine which to remove
 
@@ -1095,6 +1095,7 @@ cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richnes
 # ============================================================================
 
 library(betareg)
+library(statmod)
 
 m_SDI_clay <- betareg(
   SDI ~
