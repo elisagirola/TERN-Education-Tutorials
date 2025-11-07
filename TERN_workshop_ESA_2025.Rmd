@@ -6,8 +6,7 @@ output: word_document
 editor_options: 
   chunk_output_type: inline
 ---
-#note for some reason this chunk tries to open python in my Rstudio?
-#Figured out why - need to set working directory first before this step - can we add this in?
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -54,7 +53,7 @@ vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 ```
 
 ## For sites that have multiple site visits keep only the latest one
-#should we comment our justification in here just briefly?
+#should we comment our justification in here just briefly? yes - let's do that - definitely
 ```{r}
 library(dplyr)
 vegetation <- vegetation %>%
@@ -462,7 +461,7 @@ library(performance)
 
 
 #Hold on! There is a very important step we need to do first. Because our preditor variables are on different scales e.g., percentages for soil covariates, soil pH, degrees celsius (max, min and annual mean), precipitation (mm). This means we need to scale or 'centre' these variables so that they can be compared easily between models.
-IMPORTANT : we are NOT centring site/visit IDs or dates.
+IMPORTANT : we are NOT centering site/visit IDs or dates.
 If we do a GLMM random effects this is handled by partitioning by site / date.
 
 #centre the predictors!
@@ -478,9 +477,14 @@ head(plot_level_data)
 ```
 #create a correlation matrix to understand the level of collinearity between our predictive variables
 
-We want to know how correlated our different predictive variables are before modelling. We already expect some correlation (e.g., soils tend to move together; min/max temps hug each other), and we also know that data collected at the same sites on the same day will be correlated. The models we’re going to use (GLMMs) will partition some of that site/day dependence via random effects, but it’s still a good idea to check correlations between predictors so we can drop/merge highly redundant ones and reduce the risk of multicollinearity. Multicollinearity = predictors telling the same story so strongly that coefficients become wobbly, standard errors inflate, and the model can look unstable.
+We want to know how correlated our different predictive variables are before modelling. We already expect some correlation (e.g., soils tend to move together; min/max temps hug each other), and we also know that data collected at the same sites on the same day will be correlated. 
 
-Why we just created “_z” versions (z-centred predictors): for each predictor X, we subtract its mean and divide by its standard deviation: X_z = (X − mean(X)) / sd(X). This doesn’t change the relationships in the data; it simply puts everything on a common, unitless scale. Benefits: coefficients become comparable (“effect per 1 SD change”) across % vs mm vs °C, models tend to converge more easily (especially GLMMs), and any interactions we add later are easier to interpret. We did not centre IDs like site/visit or dates (those are random effects later), and we’re leaving latitude/longitude for the spatial correlogram rather than as fixed effects.
+It's a good idea to check correlations between predictors so we can drop/merge highly redundant ones and reduce the risk of multicollinearity. Multicollinearity = predictors telling the same story so strongly that coefficients become wobbly, standard errors inflate, and the model can look unstable.
+
+Why we just created “_z” versions (z-centred predictors): for each predictor X, we subtract its mean and divide by its standard deviation: X_z = (X − mean(X)) / sd(X). This doesn’t change the relationships in the data; it simply puts everything on a common, unitless scale. Benefits: coefficients become comparable (“effect per 1 SD change”) across % vs mm vs °C, models tend to converge more easily (especially GLMs/GLMMs), and any interactions we add later are easier to interpret. 
+
+We did not centre IDs like site/visit or dates as we only have one visit per site. If we had multiple site visits we could use site as a random effect within a GLMM 
+
 We’ll use the corresponding *_z columns for the correlations and for the model formulas so everything is on the same footing.
 
 #Here is the list of headers we want to use for this step (note - of course some will be autocorrelated):
@@ -502,7 +506,7 @@ organicCarbon_percentage
 ```{r}
 # now that we have the columns / headers we need - let's centre the predictors
 # centre the predictors (add *_z columns directly to plot_level_data)
-# se the headers determined above:
+# use the headers determined above:
 
 pred_vars <- c(
 "maximumTemperature_degreeCelsius",
@@ -519,7 +523,7 @@ pred_vars <- c(
 "organicCarbon_percentage"
 )
 
-# 1) coerce those columns to numeric quietly (only if they exist)
+# 1) coerce those columns to numeric (only if they exist)
 
 plot_level_data <- plot_level_data |>
 dplyr::mutate(
@@ -543,7 +547,7 @@ intersect(created_z, names(plot_level_data))
 #Now we're ready to run the collinearity check
 
 ```{r}
-# Correlation matrix on our centred predictors (the *_z columns
+# Correlation matrix on our centred predictors (the *_z columns)
 
 # 1) List the predictor headers we care about (exactly as in your sheet)
 
@@ -601,7 +605,7 @@ message("Not enough centred predictors found to compute a correlation matrix (ne
 
 #fantastic - we can see there is some colliearity between predictors we expected e.g., temperatures / soil sand / silt clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. E.g., if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
 
-#let's visualise the correlations between predictors so it's easier to determine which to remove
+#let's visualise the correlations between predictors so it's easier to visually determine which to remove
 
 ```{r}
 pred_vars <- c(
@@ -620,7 +624,6 @@ pred_vars <- c(
 )
 
 #use the centred versions for correlation
-
 
 preds_z <- paste0(pred_vars, "_z")
 
@@ -673,11 +676,12 @@ mar = c(0,0,1,0)
 ```
 
 #Which predictors to remove? Here is where our knowledge of plant ecosystems comes into play
-As clay and silt are highly positively correlated (0.93) and many plants are clay soil specialists. 
+As clay and silt are highly positively correlated (0.93), while sand and silt are highly negatively correlated (-0.99)
+Let's remove silt and run separate models with sand and clay separately as they may have interesting effects on plant richness.
 
 Temperature values are also (logically) correlated. As temp annual mean is correlated with both temp maxiumum and temp minimum - let's remove the average temp.
 
-Nitrogen is also highlighted as correlated with organic Carbon (again logically) as plant available nitrogen (#need to check if this is how it is measured#) is a key plant limiting soil nutrient - let's cut organic Carbon.
+Nitrogen is also highlighted as correlated with organic Carbon (again logically) as plant available nitrogen is a key plant limiting soil nutrient - let's cut organic Carbon.
 
 Removing correlated predictors reduces our risk of an overfitted model + multicollinearity! 
 
@@ -685,7 +689,7 @@ Removing correlated predictors reduces our risk of an overfitted model + multico
 
 With too many, highly redundant predictors, the model starts “fitting noise.” Coefficients become unstable, standard errors inflate, and signs can flip with small data changes. You might get impressive in-sample fit, but poor generalisation out-of-sample. Pruning correlated predictors (what you’re doing) reduces this risk and makes predictor effects more interpretable.
 
-#But sand and clay are highly negatively correlated so we might want to check the VIF (variance inflation factor for these before we start modelling)
+#As sand and clay are highly negatively correlated we might want to check the VIF (variance inflation factor for these before we start modelling)
 
 ```{r}
 #Option A — keep clay + sand (drop silt, mean temp, organic C)
@@ -735,14 +739,11 @@ print(out, row.names = FALSE)
 
 ```
 
-# sand and clay are highly negatively correlated. So we will have to drop one. 
+# sand and clay are highly negatively correlated. So as noted above let's run separate models for these
+ 
 # Fantastic - We are ready to create our models
 
-#We only have 1 visit per site across 785 sites so the GLMM random intercept will partition the data by site name: (1 | siteName)
-
-GLMM (Generalized Linear Mixed Model) requires multiple observations per 
-group to estimate random effect variance. Since each site has only one 
-observation, we CANNOT use a random intercept like (1 | siteName).
+#We only have 1 visit per site across 785 sites so we do not need to use a GLMM and partition the site visits using random effect e.g., (1 | siteName)
 
 Therefore, we use a standard GLM (Generalized Linear Model) with appropriate
 distribution families to handle our response variables.
@@ -830,6 +831,7 @@ needed <- c(
 "precipitationAnnualMean_millimetre_z",
 "availableWaterCapacity_percentage_z",
 "clay_percentage_z",
+"sand_percentage_z",
 "nitrogen_percentage_z",
 "pH_z",
 "phosphorus_percentage_z"
@@ -883,7 +885,10 @@ m_rich_clay <- glm.nb(
 # Check the model
 summary(m_rich_clay)
 
-# Check for overdispersion
+```
+```{r}
+
+# Check for overdispersion and model fit
 cat("Dispersion parameter (theta):", m_rich_clay$theta, "\n")
 
 # Model diagnostics
@@ -903,13 +908,17 @@ testDispersion(sim_clay)
 testZeroInflation(sim_clay)
 
 ```
+#model fit is fairly good
 #wow some interesting results for the clay model - what is your interpretation? We'd love to hear it.
 
-##ECOLOGICAL STORY TO BE DELETED FROM WORKSHOP VERSION## (nb: ONLY FOR OUR ANSWERS VERSION)
+##ECOLOGICAL STORY TO BE DELETED FROM WORKSHOP VERSION##
 
 #Key Ecological Story:
-Your rangeland plant diversity is primarily driven by temperature extremes (the min/max temp effects are opposite and strongest) and soil chemistry (pH, clay). The "Goldilocks zone" appears to be: warmer minimum temperatures (avoiding cold stress), cooler maximum temperatures (avoiding heat stress), and more acidic, less clay-heavy soils.
-The fact that precipitation wasn't significant is interesting - it suggests that in your dataset, temperature stress may be a stronger filter on diversity than water availability per se. This could make sense if most of your sites are already in water-limited rangelands where species are adapted to low rainfall, but temperature extremes still matter.
+Your rangeland plant diversity is primarily driven by temperature extremes (the min/max temp effects are opposite and strongest) and soil chemistry (pH, clay). 
+
+The results suggest that diversity is highest under moderate conditions — where minimum temperatures are warm enough to avoid cold stress, maximum temperatures are cool enough to avoid heat stress, and soils are moderately acidic with lower clay content.
+
+The fact that precipitation wasn’t significant is interesting. It suggests that, in your dataset, temperature stress may be a stronger filter on diversity than water availability. This could make sense if most sites are already in water-limited rangelands where species are adapted to low rainfall, but temperature extremes still shape which species can persist.
 
 #Model Performance
 
@@ -917,7 +926,7 @@ Good model fit: The reduction from null deviance (1136.99) to residual deviance 
 Theta = 7.38: This indicates moderate overdispersion is present (if it were very high, like >50, you'd be close to Poisson; low values indicate more overdispersion). The negative binomial is definitely the right choice here.
 DHARMa diagnostics look great: No dispersion issues (p=0.24) and no zero-inflation problems (p=1.0)
 
-Significant Predictors (interpreting on the log scale, then I'll convert):
+Significant Predictors:
 Minimum Temperature (positive effect, p < 0.001)*
 
 Coefficient: +0.121
@@ -956,7 +965,7 @@ Nitrogen (p = 0.61): No effect
 Sand/Silt (not in model - excluded due to collinearity with clay)
 
 
-#let's check species richness against the same glm but with sand substiuted for clay
+#let's check species richness against the same glm but with sand substiuted for sand
 
 ```{r}
 
@@ -969,14 +978,14 @@ library(DHARMa)  # for diagnostics
 
 ######################run this extra bit if sand df has dissapeared
 # Quick fix: just add the sand column to mod_df
-mod_df$sand_percentage_z <- plot_level_data$sand_percentage_z[
-  match(mod_df$siteName, plot_level_data$siteName)
-]
+#mod_df$sand_percentage_z <- plot_level_data$sand_percentage_z[
+#  match(mod_df$siteName, plot_level_data$siteName)
+#]
 
 # Verify it worked
-cat("sand_percentage_z added to mod_df\n")
-cat("NAs:", sum(is.na(mod_df$sand_percentage_z)), "\n")
-cat("Range:", range(mod_df$sand_percentage_z, na.rm = TRUE), "\n")
+#cat("sand_percentage_z added to mod_df\n")
+#cat("NAs:", sum(is.na(mod_df$sand_percentage_z)), "\n")
+#cat("Range:", range(mod_df$sand_percentage_z, na.rm = TRUE), "\n")
 
 
 # --- Fit Negative Binomial GLM with SAND as predictor ---
@@ -986,7 +995,7 @@ m_rich_sand <- glm.nb(
     maximumTemperature_degreeCelsius_z +
     precipitationAnnualMean_millimetre_z +
     availableWaterCapacity_percentage_z +
-    sand_percentage_z +  # SAND instead of clay
+    sand_percentage_z +  
     nitrogen_percentage_z +
     pH_z +
     phosphorus_percentage_z,
@@ -996,6 +1005,12 @@ m_rich_sand <- glm.nb(
 # --- Model summary ---
 summary(m_rich_sand)
 
+
+
+```
+#let's check model fit
+
+```{r}
 # --- Check dispersion parameter ---
 cat("\nDispersion parameter (theta):", m_rich_sand$theta, "\n\n")
 
@@ -1014,20 +1029,21 @@ plot(sim_sand, main = "DHARMa: Species Richness ~ Sand Model")
 testDispersion(sim_sand)
 testZeroInflation(sim_sand)
 
-
 ```
-#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage = higher diversity. Both models are essentially equivalent in explanatory power.
+
+
+#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage + more available nutrients = higher diversity. Both models are essentially equivalent in explanatory power.
 
 #Ecological Story
-Your rangeland diversity is maximized in:
+rangeland species richness is maximized in:
 
-Sandier soils (better drainage, aeration)
+Sandier soils (better drainage, aeration, + likely more available nutrients)
 Warmer minimum temps (less cold stress)
 Cooler maximum temps (less heat stress)
 More acidic pH (lower pH values)
 Lower phosphorus (possibly reduced competitive dominance)
 
-Recommendation: Since sand and clay are just mirror images of the same gradient, I'd suggest picking one model (probably sand, since it has slightly lower AIC and phosphorus becomes significant). You could also mention in your write-up that "clay showed the opposite pattern (β = -0.044, p = 0.006), as expected given the negative correlation between sand and clay content."
+Since sand and clay are just mirror images of the same gradient, possibly pick one model (probably sand, since it has slightly lower AIC and phosphorus becomes significant). 
 
 #Pick the best model / model selection for species richness
 
@@ -1045,7 +1061,7 @@ cat("Choosing SAND model (marginally lower AIC, clearer P effect).\n")
 cat("Clay shows inverse pattern as expected (r = -0.XX between sand/clay).\n")
 
 ```
-#summary - delete later
+#summary## - Elisa should we delete - I feel in the interests of time probably delete? 
 
 ```{r}
 # ============================================================================
@@ -1081,10 +1097,9 @@ cat("  • pH (−): β = -0.138, p < 0.001 → more acidic soils = higher richn
 cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richness\n\n")
 
 
-
-
 ```
 #now the SDI (simpson's diversity index) models
+
 
 ```{r}
 
@@ -1113,48 +1128,120 @@ m_SDI_clay <- betareg(
 cat("=== SDI ~ CLAY MODEL ===\n")
 summary(m_SDI_clay)
 
-# Diagnostics
-par(mfrow = c(2, 2))
-plot(m_SDI_clay, which = 1:4)
-
-# Pearson residuals QQ plot
-par(mfrow = c(1, 1))
-res_clay <- residuals(m_SDI_clay, type = "pearson")
-qqnorm(res_clay, main = "Pearson Residuals: SDI ~ Clay")
-qqline(res_clay, col = "red")
 
 ```
+#check model fit
+
+```{r}
+# Diagnostics
+
+# SDI ~ CLAY
+par(mfrow = c(1, 2))
+plot(m_SDI_clay, which = 1)   # residuals vs fitted  (OK)
+plot(m_SDI_clay, which = 4)   # leverage/Cook's      (OK)
+
+# Manual QQ + Pearson residuals (kept)
+par(mfrow = c(1, 2))
+res_clay <- residuals(m_SDI_clay, type = "pearson")
+fit_clay <- fitted(m_SDI_clay)
+plot(fit_clay, res_clay, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
+qqnorm(res_clay, main = "QQ: Pearson residuals (CLAY)"); qqline(res_clay, col="red")
+
+
+
+
+```
+#model fit interpretation
+🧩 1. Why the QQ plot might look odd
+
+A slightly curved or scattered QQ line in betareg residuals is normal because:
+
+Residuals are not expected to be normal — the model uses a beta (bounded 0–1) likelihood, not a Gaussian one.
+
+The residuals depend on the mean–variance relationship, which can change with predictors.
+So, unlike a linear model, you don’t expect a perfect straight QQ line.
+
+In short: a “wonky” QQ plot isn’t automatically a problem here.
+
+#however! the residuals vs linear does have a funnel shape so we are going to test this with a “precision” (phi) sub-model
+
+# In beta regression, φ (phi) controls the precision or spread of values around the mean (μ).
+# By default, φ is constant (equal variability for all observations).
+# A "phi model" lets φ vary with predictors when residuals show changing spread (heteroskedasticity).
+# This improves fit and reveals where SDI is more or less consistent across environments.
+# μ model → predicts mean SDI; φ model → predicts variability of SDI.
+
+
+```{r}
+m_SDI_clay_phi <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    clay_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z |
+    clay_percentage_z + maximumTemperature_degreeCelsius_z,   # precision model
+  data = plot_level_data
+)
+
+summary(m_SDI_clay_phi)
+
+AIC(m_SDI_clay, m_SDI_clay_phi)
+
+```
+#interesting!
+Because residual variance increased with the fitted values, we allowed the precision parameter (φ) to vary with environmental predictors.
+The variable-precision model provided a substantially better fit (ΔAIC = 28), indicating that SDI variability changes systematically across environmental gradients.
+
+##let's recheck model fit
+
+```{r}
+# --- Re-check fit for phi model ------------------------------------------
+# Diagnostics: same 4 plots as before (but for the phi model)
+par(mfrow = c(2, 2))
+plot(m_SDI_clay_phi, which = 1:4)
+
+# Extra quick looks
+par(mfrow = c(1, 2))
+# Pearson residuals vs fitted (should look like random noise; funnel should be reduced)
+res_phi <- residuals(m_SDI_clay_phi, type = "pearson")
+fit_phi <- fitted(m_SDI_clay_phi)
+plot(fit_phi, res_phi, xlab = "Fitted (mu)", ylab = "Pearson residuals",
+     main = "Residuals vs Fitted (phi model)")
+abline(h = 0, lty = 2)
+
+# QQ plot of Pearson residuals (wonky is OK in beta; looking for major deviations)
+qqnorm(res_phi, main = "QQ: Pearson residuals (phi model)")
+qqline(res_phi, col = "red")
+
+# Compare to constant-phi model via LR test and AIC (confirms improvement)
+library(lmtest)
+print(lrtest(m_SDI_clay, m_SDI_clay_phi))
+AIC(m_SDI_clay, m_SDI_clay_phi)
+
+```
+
+#let's check the model summary table for this better phi model
+
+```{r}
+# --- Inspect model summary tables ----------------------------------------
+s <- summary(m_SDI_clay_phi)
+s  # full console summary (includes pseudo R^2, logLik, etc.)
+cat("Pseudo R^2 (McFadden):", round(s$pseudo.r.squared, 3), "\n")
+```
+
 #SDI ~ clay predictors model interpretation:
 
-SDI ~ Clay Model Interpretation
-Model Fit Notes:
+The variable-precision beta regression indicated that diversity–evenness (SDI) is most strongly influenced by temperature extremes.
+Minimum temperature had a positive effect, while maximum temperature had a strong negative effect on SDI, suggesting that diversity is highest under moderate temperature conditions — warm enough to avoid cold stress but not so hot that heat stress reduces evenness.
+Available water capacity showed a modest positive effect, while clay had a weak negative trend.
 
-The warning about "extended-support beta regression" and diagnostic plots is normal - betareg automatically uses extended support when SDI values are near 0 or 1
-"So-so" residuals are common with beta regression on ecological diversity indices - they're rarely perfect
-As long as there's no major pattern in residuals vs fitted, you're okay
+The precision (φ) submodel revealed that SDI variability increases under hotter maximum temperatures, indicating that diversity patterns become less consistent as temperature stress intensifies.
 
-Significant Predictors:
-Maximum Temperature (negative, p < 0.001)*
-
-Coefficient: -0.227
-Strong negative effect: higher max temps → lower diversity (evenness)
-Same pattern as species richness!
-
-Minimum Temperature (positive, p = 0.039)
-
-Coefficient: +0.089
-Warmer minimum temps → higher diversity
-Weaker effect than on species richness, but same direction
-
-Non-significant (but Clay is borderline):
-
-Clay: p = 0.165 (not significant for SDI, unlike richness where it was p = 0.006)
-pH: p = 0.261 (not significant for SDI, unlike richness where it was p < 0.001)
-Phosphorus: p = 0.204 (not significant)
-AWC: p = 0.073 (marginally)
-
-Key Finding:
-Temperature matters more for SDI than soil does! For species richness, both temperature AND soil (clay, pH) were important. For diversity/evenness (SDI), it's mostly about temperature extremes.
+Together, these results show that temperature drives both the mean and variability of community evenness, while soil properties play secondary roles.
 
 
 #let's move onto the model for SDI ~ sand + predictors
@@ -1180,212 +1267,243 @@ m_SDI_sand <- betareg(
 cat("\n=== SDI ~ SAND MODEL ===\n")
 summary(m_SDI_sand)
 
-# Diagnostics
-# === DIAGNOSTICS FOR SDI ~ SAND (extended-support betareg) ===
-par(mfrow = c(1, 2))
-
-# 1) Residuals vs fitted (RQ residuals)
-rq  <- residuals(m_SDI_sand, type = "quantile")
-fit <- fitted(m_SDI_sand)
-plot(fit, rq,
-     xlab = "Fitted values",
-     ylab = "Randomized-quantile residuals",
-     main = "Residuals vs Fitted")
-abline(h = 0, lty = 2, col = "grey40")
-
-# 2) QQ plot of RQ residuals
-qqnorm(rq, main = "QQ plot (RQ residuals)")
-qqline(rq, col = "grey40", lty = 2)
-
-
-
-# Pearson residuals QQ plot
-par(mfrow = c(1, 1))
-res_sand <- residuals(m_SDI_sand, type = "pearson")
-qqnorm(res_sand, main = "Pearson Residuals: SDI ~ Sand")
-qqline(res_sand, col = "red")
 
 ```
-#the Ecological Story:
-For Species Richness: You need the right soil (sandy, acidic, low P) to support a diverse flora. Temperature matters, but soil is the primary filter.
-For Diversity (SDI): Once species are present, temperature extremes determine whether communities are dominated by a few stress-tolerant species (low SDI) or have more even abundance distributions (high SDI). Soil matters less for competitive dynamics.
 
-The AWC result is intriguing: Higher water-holding capacity might favor competitive dominants that can monopolize resources, reducing evenness.
+#let's check model fit
+```{r}
+# SDI ~ SAND
+par(mfrow = c(1, 2))
+plot(m_SDI_sand, which = 1)   # residuals vs fitted
+plot(m_SDI_sand, which = 4)   # leverage/Cook's
 
-#let's create a summary table of all 4 models
-##Elisa I'm still playing around with this and the AI (LOL - not sure if we should keep or delete heehee let's see)
+# Manual QQ + Pearson residuals (kept)
+par(mfrow = c(1, 2))
+res_sand <- residuals(m_SDI_sand, type = "pearson")
+fit_sand <- fitted(m_SDI_sand)
+plot(fit_sand, res_sand, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
+qqnorm(res_sand, main = "QQ: Pearson residuals (SAND)"); qqline(res_sand, col="red")
+
+
+```
+
+#again we have a bit of funnel shape - let's fit the phi model and compare
 
 ```{r}
-# ============================================================================
-# COMPREHENSIVE MODEL COMPARISON TABLE
-# ============================================================================
-
-# Extract coefficients and p-values from all models
-library(dplyr)
-
-# Function to extract model results
-extract_results <- function(model, model_name) {
-  if (inherits(model, "negbin")) {
-    # For glm.nb models
-    coef_summary <- summary(model)$coefficients
-    results <- data.frame(
-      Model = model_name,
-      Predictor = rownames(coef_summary),
-      Estimate = coef_summary[, "Estimate"],
-      SE = coef_summary[, "Std. Error"],
-      z_value = coef_summary[, "z value"],
-      p_value = coef_summary[, "Pr(>|z|)"],
-      sig = ifelse(coef_summary[, "Pr(>|z|)"] < 0.001, "***",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.01, "**",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.05, "*",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.1, ".", "")))),
-      stringsAsFactors = FALSE
-    )
-  } else if (inherits(model, "betareg")) {
-    # For betareg models (only mu coefficients)
-    coef_summary <- summary(model)$coefficients$mean
-    results <- data.frame(
-      Model = model_name,
-      Predictor = rownames(coef_summary),
-      Estimate = coef_summary[, "Estimate"],
-      SE = coef_summary[, "Std. Error"],
-      z_value = coef_summary[, "z value"],
-      p_value = coef_summary[, "Pr(>|z|)"],
-      sig = ifelse(coef_summary[, "Pr(>|z|)"] < 0.001, "***",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.01, "**",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.05, "*",
-            ifelse(coef_summary[, "Pr(>|z|)"] < 0.1, ".", "")))),
-      stringsAsFactors = FALSE
-    )
-  }
-  return(results)
-}
-
-# Extract results from all models
-rich_clay_results <- extract_results(m_rich_clay, "Richness_Clay")
-rich_sand_results <- extract_results(m_rich_sand, "Richness_Sand")
-sdi_clay_results <- extract_results(m_SDI_clay, "SDI_Clay")
-sdi_sand_results <- extract_results(m_SDI_sand, "SDI_Sand")
-
-# Combine all results
-all_results <- rbind(rich_clay_results, rich_sand_results, 
-                     sdi_clay_results, sdi_sand_results)
-
-# Remove intercept rows for cleaner comparison
-all_results <- all_results[all_results$Predictor != "(Intercept)", ]
-
-# Create wide format table for easy comparison
-library(tidyr)
-
-comparison_table <- all_results %>%
-  select(Model, Predictor, Estimate, p_value, sig) %>%
-  mutate(
-    coef_sig = sprintf("%.3f %s", Estimate, sig),
-    p_display = sprintf("%.4f", p_value)
-  ) %>%
-  select(Model, Predictor, coef_sig, p_display) %>%
-  pivot_wider(
-    names_from = Model,
-    values_from = c(coef_sig, p_display),
-    names_glue = "{Model}_{.value}"
-  )
-
-# Clean up predictor names for display
-comparison_table$Predictor <- gsub("_z$", "", comparison_table$Predictor)
-comparison_table$Predictor <- gsub("_", " ", comparison_table$Predictor)
-
-# Print the table
-cat("\n=== COMPREHENSIVE MODEL COMPARISON ===\n\n")
-print(comparison_table, row.names = FALSE)
-
-# Model fit statistics
-cat("\n\n=== MODEL FIT STATISTICS ===\n")
-fit_stats <- data.frame(
-  Model = c("Richness ~ Clay", "Richness ~ Sand", "SDI ~ Clay", "SDI ~ Sand"),
-  AIC = c(AIC(m_rich_clay), AIC(m_rich_sand), AIC(m_SDI_clay), AIC(m_SDI_sand)),
-  N_obs = c(nobs(m_rich_clay), nobs(m_rich_sand), nobs(m_SDI_clay), nobs(m_SDI_sand))
+# === Fit variable-precision (phi) model for SAND ===
+m_SDI_sand_phi <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    sand_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z |
+    sand_percentage_z + maximumTemperature_degreeCelsius_z,   # phi submodel
+  data = plot_level_data
 )
 
-if (inherits(m_rich_clay, "negbin")) {
-  fit_stats$Theta <- c(m_rich_clay$theta, m_rich_sand$theta, NA, NA)
-  fit_stats$LogLik <- c(logLik(m_rich_clay)[1], logLik(m_rich_sand)[1], 
-                         logLik(m_SDI_clay)[1], logLik(m_SDI_sand)[1])
-}
-
-print(fit_stats, row.names = FALSE)
+# Compare with LR test and AIC (as done for clay)
+library(lmtest)
+print(lrtest(m_SDI_sand, m_SDI_sand_phi))
+AIC(m_SDI_sand, m_SDI_sand_phi)
 
 
-# ============================================================================
-# SUMMARY TABLE: WHICH PREDICTORS ARE SIGNIFICANT?
-# ============================================================================
+```
+#which one to keep?
+ΔAIC ≈ 29 (–827.4 vs –798.0) → the variable-precision - phi model fits much better.
 
-cat("\n\n=== SIGNIFICANCE SUMMARY ===\n")
-sig_summary <- all_results %>%
-  mutate(
-    is_sig = ifelse(p_value < 0.05, "✓", ""),
-    is_marginal = ifelse(p_value >= 0.05 & p_value < 0.1, "(.)", ""),
-    direction = ifelse(Estimate > 0, "+", "−")
-  ) %>%
-  select(Model, Predictor, direction, is_sig, is_marginal, p_value) %>%
-  pivot_wider(
-    names_from = Model,
-    values_from = c(direction, is_sig, is_marginal),
-    names_glue = "{Model}_{.value}"
-  )
+Likelihood ratio test: χ² = 33.37, df = 2, p < 0.001 → highly significant improvement.
 
-sig_summary$Predictor <- gsub("_z$", "", sig_summary$Predictor)
-sig_summary$Predictor <- gsub("_", " ", sig_summary$Predictor)
-
-# Create clean display
-sig_display <- sig_summary %>%
-  mutate(
-    Richness_Clay = paste0(Richness_Clay_direction, " ", Richness_Clay_is_sig, Richness_Clay_is_marginal),
-    Richness_Sand = paste0(Richness_Sand_direction, " ", Richness_Sand_is_sig, Richness_Sand_is_marginal),
-    SDI_Clay = paste0(SDI_Clay_direction, " ", SDI_Clay_is_sig, SDI_Clay_is_marginal),
-    SDI_Sand = paste0(SDI_Sand_direction, " ", SDI_Sand_is_sig, SDI_Sand_is_marginal)
-  ) %>%
-  select(Predictor, Richness_Clay, Richness_Sand, SDI_Clay, SDI_Sand)
-
-print(sig_display, row.names = FALSE)
-cat("\nLegend: ✓ = significant (p<0.05), (.) = marginal (p<0.1), + = positive, − = negative\n")
+This tells us the precision (φ) varies systematically with sand and maximum temperature—just like it did with clay.
+In other words, SDI variability isn’t constant: it changes across sandier and hotter environments.
 
 
-# ============================================================================
-# KEY INSIGHTS
-# ============================================================================
+#check model fit
 
-cat("\n\n=== KEY INSIGHTS ===\n\n")
+```{r}
+# === MODEL FIT CHECK: SDI ~ SAND (phi model) ==============================
 
-cat("SPECIES RICHNESS (count of species):\n")
-cat("  • Temperature effects: Min temp (+) ***, Max temp (−) ***\n")
-cat("  • Soil texture: Clay (−) **, Sand (+) ** [opposite, as expected]\n")
-cat("  • Soil chemistry: pH (−) ***\n")
-cat("  • Nutrients: Phosphorus (−) * to **\n")
-cat("  • AIC: Clay=", round(AIC(m_rich_clay), 1), ", Sand=", round(AIC(m_rich_sand), 1), 
-    " (essentially equivalent)\n\n")
+# Supported base plots for betareg (which = 1 and 4 only)
+par(mfrow = c(1, 2))
+plot(m_SDI_sand_phi, which = 1)  # Residuals vs fitted
+plot(m_SDI_sand_phi, which = 4)  # Leverage/Cook's distance
 
-cat("SIMPSON DIVERSITY INDEX (evenness):\n")
-cat("  • Temperature effects: Min temp (+) *, Max temp (−) ***\n")
-cat("  • Soil properties: Mostly NON-significant\n")
-cat("  • Water: AWC (−) * in sand model only\n")
-cat("  • AIC: Clay=", round(AIC(m_SDI_clay), 1), ", Sand=", round(AIC(m_SDI_sand), 1), 
-    " (essentially equivalent)\n\n")
+# Additional custom diagnostic plots (same as clay)
+par(mfrow = c(1, 2))
+res_sand_phi <- residuals(m_SDI_sand_phi, type = "pearson")
+fit_sand_phi <- fitted(m_SDI_sand_phi)
 
-cat("ECOLOGICAL INTERPRETATION:\n")
-cat("  1. Soil properties (texture, pH, P) are strong filters for RICHNESS\n")
-cat("     → determine which species can establish and persist\n\n")
-cat("  2. Temperature extremes drive both RICHNESS and EVENNESS (SDI)\n")
-cat("     → Min temp (+): less cold stress → more/better species\n")
-cat("     → Max temp (−): less heat stress → more/better species\n\n")
-cat("  3. For EVENNESS specifically, soil matters less than for richness\n")
-cat("     → Temperature stress determines competitive dominance patterns\n")
-cat("     → Communities under extreme heat have a few dominant species\n\n")
+# Residuals vs fitted (to check funnel pattern)
+plot(fit_sand_phi, res_sand_phi,
+     xlab = "Fitted (mu)",
+     ylab = "Pearson residuals",
+     main = "Residuals vs Fitted (SAND, phi model)")
+abline(h = 0, lty = 2, col = "grey40")
 
-cat("MODEL SELECTION:\n")
-cat("  • For Richness: Use SAND model (slightly lower AIC, P significant)\n")
-cat("  • For SDI: Use SAND model (slightly lower AIC, AWC becomes significant)\n")
-cat("  • Clay models tell same story (opposite sign for clay vs sand)\n\n")
+# QQ plot (shape can be slightly curved in beta models)
+qqnorm(res_sand_phi, main = "QQ: Pearson residuals (SAND, phi model)")
+qqline(res_sand_phi, col = "red", lty = 2)
+
+```
+#it's a better fit - let's check the phi SDI ~ sand model
+```{r}
+# === MODEL SUMMARY: SDI ~ SAND (phi model) ===============================
+
+# View full model summary
+summary(m_SDI_sand_phi)
 ```
 
+#sand phi model interpretation:
+Temperature sets the tone. SDI (evenness/diversity) is highest where minimum temps are warmer and maximum temps are cooler (μ: min T +, max T −; both significant). That’s a “moderate temperatures = more even communities” story.
+
+Soil water matters. Available water capacity has a negative coefficient (μ), indicating lower AWC → higher evenness (significant). In these rangelands, places with less plant-available water tend to have communities that are more even.
+
+Texture signal from sand. Sand % is positive and significant in the φ model: μ: sand + (significant) → sandier sites show slightly higher evenness after controlling for climate and chemistry.
+
+Rainfall is secondary. Precipitation is only marginal (μ, p≈0.07), consistent with temperature extremes being the stronger filter here.
+
+Variance tells an extra story (φ model). Max temperature strongly reduces φ (φ: max T −, p<0.001), meaning hotter sites have more variable SDI (less predictable evenness). Sand’s effect on φ is small/non-sig, so most variance changes are tied to heat rather than texture.
+
+One-liner: In these sandier rangelands, community evenness is highest under warm nights, cooler days, and lower AWC, with a modest boost from sandiness; heat stress not only lowers evenness on average, it also makes it more variable across sites.
+
+
+#The Overall Ecological Story:
+#Elisa - let's check that this actually makes sense - can you read and see if the interpretation makes sense?#
+
+#Species Richness:
+Species richness is highest on coarse-textured, acidic, low-phosphorus soils—conditions typical of freely draining sandy substrates. These soils reduce competitive exclusion and favour the coexistence of many stress-tolerant species. Temperature also influences richness, but soil texture and chemistry act as the primary environmental filters.
+
+#Diversity (SDI):
+Once species are established, temperature extremes control community evenness: warmer minimum temperatures enhance evenness, while hotter maximum temperatures reduce it. Lower water-holding capacity (AWC) is associated with higher evenness, consistent with environments where limited resources prevent dominance by a few species.
+
+#Variance (φ model):
+Hotter conditions increase the variability of SDI across sites, suggesting that heat stress not only lowers evenness on average but also makes community structure less predictable.
+
+
+#let's create a summary plot of all 4 models
+
+```{r}
+# === Clean coefficient plotting (robust; handles betareg + NB; no Log(nu)) ==
+library(ggplot2)
+library(dplyr)
+library(stringr)
+
+.extract_coef_table <- function(model) {
+  # Returns a data.frame with columns: term, estimate, se
+  if (inherits(model, "betareg")) {
+    # 1) Try broom tidy (mean component only)
+    td <- try({
+      if (requireNamespace("broom", quietly = TRUE)) {
+        broom::tidy(model, component = "mean", conf.int = FALSE)
+      } else NULL
+    }, silent = TRUE)
+    if (inherits(td, "data.frame") && all(c("term","estimate","std.error") %in% names(td))) {
+      return(td |>
+               dplyr::transmute(term, estimate, se = std.error))
+    }
+
+    # 2) Fall back to summary() mean block
+    sm <- summary(model)
+    cf <- try(sm$coefficients$mean, silent = TRUE)
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical names: "Estimate", "Std. Error", "z value", "Pr(>|z|)"
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (!is.na(est_col) && !is.na(se_col)) {
+        df$term <- rownames(df); rownames(df) <- NULL
+        return(df |>
+                 dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+      }
+    }
+
+    # 3) Last resort: use coef() + vcov() for mean submodel
+    est_vec <- try(coef(model)[["mean"]], silent = TRUE)
+    if (inherits(est_vec, "numeric")) {
+      vc  <- try(vcov(model, model = "mean"), silent = TRUE)
+      se_vec <- if (inherits(vc, "matrix")) sqrt(diag(vc)) else NA_real_
+      df <- data.frame(term = names(est_vec), estimate = as.numeric(est_vec), se = as.numeric(se_vec))
+      return(df)
+    }
+
+    stop("Could not extract coefficients for betareg model.")
+  }
+
+  # MASS::glm.nb and similar
+  if ("negbin" %in% class(model)) {
+    sm <- summary(model)
+    cf <- sm$coefficients
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical colnames: "Estimate", "Std. Error", ...
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (is.na(est_col) || is.na(se_col)) {
+        # Fallback to first two numeric columns
+        num_idx <- which(vapply(df, is.numeric, logical(1)))
+        if (length(num_idx) >= 2) {
+          est_col <- names(df)[num_idx[1]]
+          se_col  <- names(df)[num_idx[2]]
+        }
+      }
+      df$term <- rownames(df); rownames(df) <- NULL
+      return(df |>
+               dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+    }
+    stop("Could not extract coefficients for glm.nb model.")
+  }
+
+  stop(sprintf("Unsupported model class: %s", paste(class(model), collapse = "/")))
+}
+
+one_coef_plot <- function(model, model_name, title = NULL) {
+  # --- extract --------------------------------------------------------------
+  df <- .extract_coef_table(model)
+
+  dat <- df |>
+    dplyr::filter(term != "(Intercept)") |>
+    # Belt-and-braces: drop any auxiliary/precision/nu rows
+    dplyr::filter(!stringr::str_detect(term, "(?i)log\\((nu|phi)\\)|^nu$|^phi$|precision")) |>
+    dplyr::mutate(
+      lower = estimate - 1.96 * se,
+      upper = estimate + 1.96 * se,
+      term  = term |>
+        stringr::str_replace("_z$", "") |>
+        stringr::str_replace_all("_", " ")
+    )
+
+  aic_val <- tryCatch(round(AIC(model), 1), error = function(e) NA_real_)
+
+  ggplot(dat, aes(x = reorder(term, abs(estimate)), y = estimate)) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    geom_pointrange(aes(ymin = lower, ymax = upper)) +
+    coord_flip() +
+    labs(
+      x = NULL, y = "Coefficient (±95% CI)",
+      title = if (is.null(title)) model_name else title,
+      subtitle = if (!is.na(aic_val)) paste0("AIC: ", aic_val) else NULL
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold"),
+          plot.margin = margin(10, 20, 10, 10))
+}
+
+# --- your models -----------------------------------------------------------
+models <- list(
+  "SR ~ sand (NB)"    = m_rich_sand,
+  "SR ~ clay (NB)"    = m_rich_clay,
+  "SDI ~ sand (beta)" = m_SDI_sand_phi,
+  "SDI ~ clay (beta)" = m_SDI_clay_phi
+)
+
+# --- print plots -----------------------------------------------------------
+for (nm in names(models)) {
+  print(one_coef_plot(models[[nm]], nm))
+}
+
+```
 
 
