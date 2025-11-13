@@ -1,0 +1,82 @@
+# Direct data access from R for the datasets used in the Rangeland tutorial
+
+
+These pieces of code were originally included in the Rangeland tutorial. They allow to access the data directly through their url or through the Ecoplots API. We removed them from the tutorial as too time consuming. We will make them into separate tutorials. 
+
+<!-- <!-- ## Import the data from Ecoplots --> -->
+<!-- ```{r}  -->
+<!-- library(httr) -->
+
+<!-- headers = c( -->
+<!--   'X-Api-Key' = 'your-api-key', -->
+<!--   'Content-Type' = 'application/json' -->
+<!-- ) -->
+
+<!-- body = '{ -->
+<!--   "query": { -->
+<!--     "dataset": [ -->
+<!--       "http://linked.data.gov.au/dataset/ausplots" -->
+<!--     ], -->
+<!--     "used_procedure": [ -->
+<!--       "http://linked.data.gov.au/def/ausplots-cv/c5a32483-bf2f-421d-b03d-6d81e1195de2", -->
+<!--       "http://linked.data.gov.au/def/ausplots-cv/1d39b897-d6d3-40e9-8113-8ebeab2cd38e" -->
+<!--     ], -->
+<!--     "feature_type": [ -->
+<!--       "http://linked.data.gov.au/def/tern-cv/b311c0d3-4a1a-4932-a39c-f5cdc1afa611" -->
+<!--     ], -->
+<!--     "observed_property": [ -->
+<!--       "http://linked.data.gov.au/def/tern-cv/70646576-6dc7-4bc5-a9d8-c4c366850df0" -->
+<!--     ] -->
+<!--   } -->
+<!-- }'; -->
+
+<!-- res <- VERB("POST", url = "https://ecoplots.tern.org.au/api/v1.0/data?dformat=csv", body = body, add_headers(headers)) -->
+
+<!-- cat(content(res, 'text')) -->
+
+<!-- ``` -->
+
+
+## Access data directly from WCS
+This example allows to access the clay surface (0 to -5cm) map directly from the server. More parameters and layers can be added. Please note that each map requires several minutes to run. 
+```{r}
+# library(terra)
+# 
+# # WCS endpoint and layer
+# base_url <- "https://geoserver.tern.org.au/geoserver/slga/CLY_v2/wcs"
+# layer <- "slga__cly_ev_n_p_au_trn_n_20210902"
+# 
+# # Small buffer around each point (0.01 degrees ~1 km)
+# buffer <- 0.01
+# 
+# # Function to get clay value at a single point
+# get_clay_at_point <- function(lon, lat) {
+#   xmin <- lon - buffer
+#   xmax <- lon + buffer
+#   ymin <- lat - buffer
+#   ymax <- lat + buffer
+#   
+#   getcov <- paste0(
+#     base_url,
+#     "?service=WCS&version=2.0.1&request=GetCoverage",
+#     "&coverageId=", layer,
+#     "&format=image/geotiff",
+#     "&subset=Long(", xmin, ",", xmax, ")",
+#     "&subset=Lat(", ymin, ",", ymax, ")"
+#   )
+#   
+#   # Download tiny raster
+#   r <- rast(getcov)
+#   
+#   # Extract value at the exact point
+#   extract(r, vect(data.frame(lon=lon, lat=lat), geom=c("lon","lat"), crs="EPSG:4326"))[,2]
+# }
+# 
+# # Apply to all points
+# plot_level_data$CLY_0_5cm <- mapply(get_clay_at_point,
+#                                lon = plot_level_data$longitude_Degree,
+#                                lat = plot_level_data$latitude_Degree)
+# 
+# head(plot_level_data)
+
+```
