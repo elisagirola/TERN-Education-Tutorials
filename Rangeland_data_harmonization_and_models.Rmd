@@ -1,0 +1,1988 @@
+---
+title: "Integrating Multi-Source Environmental Data to Monitor Plant Biodiversity Across Australian Rangelands"
+author: "Elisa Girola and Eleanor Velasquez"
+date: "2025-09-22"
+output: word_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+In this tutorial we will bring together different data products to investigate the relationship between plant species richness and meteorological and soil parameters in Australian rangelands. The original data products were collected or generated independently. They have different spatial and temporal covers and resolutions, and are saved in different file formats. In this tutorial we will demonstrate how to process the original data to create an harmonised dataset. This will be used in statistical models to investigate the main drivers of vegetation species richness in Australian rangelands.  
+
+
+# SET UP
+## Clean the workspace
+```{r, include=FALSE}
+rm(list=ls()) # Clean the workspace
+
+```
+
+
+## Set up global options
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) # Show the R code in all other chunks of this R-markdown into the knitted document.
+```
+
+
+# ACCESSING THE DATA
+For this tutorial you will need vegetation data from field surveys, modelled meteorological data, and soil maps. 
+
+There are two ways of getting the data into R:
+
+1) Download each data file to your local machine. With this method the code will run faster. 
+
+2) Access the data directly from R. This method ensures that you will always access the latest version of the data. However, it will require longer to run the code. 
+
+For this tutorial we will use option 1. You will need to download about 50 files. We recommend downloading all the files to your local machine before starting the tutorial. You will need about 7 GB of disk space for this. For the code to run smoothly it is important that all the files are saved in the same folder, without any subfolders. No other files should be saved in this folder.  
+
+
+## Vegetation data
+Usually you would download vegetation survey data through the Ecoplots dashboard https://ecoplots.tern.org.au/ However, for this tutorial we have pre-selected the data and saved them to a csv file that can be accessed through the following link. This ensures that the file contains only the data that we need for the tutorial keeping the file size small and the results reproducible. 
+
+THIS IS THE LINK TO THE VEGETATION DATA CSV FILE
+
+
+## Meteorological data
+Meteorological data are in netCDF files and can be downloaded through the following links. Since we are using monthly mean data, for each parameters there are 12 files, i.e. one for each month of the year. 
+
+### Precipitation
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_01.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_02.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_03.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_04.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_05.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_06.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_07.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_08.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_09.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_10.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_11.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_12.nc
+
+
+### Monthly mean minimum temperature
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_01.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_02.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_03.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_04.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_05.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_06.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_07.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_08.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_09.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_10.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_11.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-min_monthly-mean_0-01deg_1976-2005_00000000_12.nc
+
+
+### Monthly mean maximum temperature
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_01.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_02.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_03.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_04.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_05.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_06.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_07.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_08.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_09.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_10.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_11.nc
+
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_12.nc
+
+
+## Soil maps
+Soil maps are .tif files and can be downloaded through the following links. Please note that these are large files and may require a few minutes to download.
+
+### Available Water Capacity 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/AWC/v2/AWC_000_005_EV_N_P_AU_TRN_N_20210614.tif   
+
+### Clay
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/CLY/v2/CLY_000_005_EV_N_P_AU_TRN_N_20210902.tif
+
+### Nitrogen 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/NTO/v2/NTO_000_005_EV_N_P_AU_NAT_C_20231101.tif
+
+### pH 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/pHc/v2/PHC_000_005_EV_N_P_AU_NAT_C_20210913.tif
+
+### Phosphorus
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/PTO/v2/PTO_000_005_EV_N_P_AU_NAT_C_20231101.tif
+
+### Silt 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/SLT/v2/SLT_000_005_EV_N_P_AU_TRN_N_20210902.tif       
+
+### Sand 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/SND/v2/SND_000_005_EV_N_P_AU_TRN_N_20210902.tif
+
+### Organic Carbon 
+https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/SOC/90m/v2/SOC_000_005_EV_N_P_AU_TRN_N_20220727.tif
+
+Please note that in this tutorial we use only surface maps (0 to 5cm). However, soil maps are available for another five layers, up to a depth of 2m. 
+    
+
+## Australian rangeland boundaries
+We will need to define the boundaries for Australian rangelands. To do this we will use shapefiles created by the Department of Climate Change, Energy, the Environment and Water (DCCEEW). To download these files:
+
+- Click on this link https://fed.dcceew.gov.au/datasets/erin::australian-rangeland-boundaries/about
+- Click on download 
+- Select Shapefile
+
+
+# VEGETATION
+The dataset used for this tutorial is: 
+
+Sparrow, B., Tokmakoff, A., Leitch, E., Guerin, G., O'Neill, S., Macdonald, C., Lowe, A., Flitton, R., Saleeba, T., Coish, C. Starkey, M., Irvine, K., Francis, N., Finlayson, T., Pink, L., Finn, L., Martin-Fores, I. & TERN Ecosystem Surveillance (2021). TERN Ecosystem Surveillance. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://portal.tern.org.au/metadata/TERN/9210c331-ba96-4e0c-9554-f029d61534be
+
+Data were collected by TERN Surveillance according to the AusPlots Rangelands Survey Protocols https://swift.rc.nectar.org.au/v1/AUTH_05bca33fce34447ba7033b9305947f11/static-web-assets/ausplots-rangelands-manual/v1.2.9/manual.pdf
+
+Related metadata are available here https://portal.tern.org.au/metadata/TERN/9210c331-ba96-4e0c-9554-f029d61534be
+
+We will also need the shapefiles for the Australian rangeland boundaries: 
+
+Commonwealth of Australia (Department of Climate Change, Energy, the Environment and Water) (2014). Australian Rangeland Boundaries. https://www.arcgis.com/home/item.html?id=bf09a05d02854dcd98caca1cc17b98f6
+
+
+## Import the data
+This chunk imports the csv file with the data or vegetation plot surveys. 
+The first line of code in this chunk allows you to interactively select the folder where the data are saved. Hopefully you have saved all the data in this folder and will not need to select the folder again. 
+# note put this before the command/chunk to knitR or there is a warning / error message.
+```{r}
+# Select data folder
+data_folder <- rstudioapi::selectDirectory()
+
+# Specify file name
+file_name <- "Plant_occurrence.csv"
+
+# Combine folder + file name
+file_path <- file.path(data_folder, file_name)
+
+# Read the CSV
+vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
+
+```
+
+
+## Create a table of plot level data
+We now need to create a table that will contain one row for each plot. All data summarised at the plot level (e.g. species richness, metereological parameters, soil parameters) will be saved here. 
+```{r}
+# Create a table of plot-level data with selected columns
+plot_level_data <- vegetation %>%
+  dplyr::select(datasetTitle, siteName, latitude_Degree, longitude_Degree,
+         plotArea_SquareMetre, plotWidth_Metre, plotLength_Metre, plotShape,
+         pointType, siteVisitName, siteVisitStartDate, siteVisitEndDate) %>%
+  dplyr::group_by(siteName) %>%
+  dplyr::slice(1) %>%   # pick the first row per site (all share the same plot details)
+  dplyr::ungroup()
+
+```
+
+
+## Filter out sites outside of the rangelands boundaries
+The dataset contains both rangeland and non-rangeland plots. Rangelands boundaries are defined by the Dept of Climate Change, Energy, the Environment & Water (DCCEEW) and available as a shapefile. This chunk reads the shapefile and uses it to filter the plots based on their geographic coordinates (lat and lon). Plots outside of the rangeland boundaries are removed from dataset. 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(sf)
+
+#-------------------------------------------------------------------------------
+# Show the locations of each plot in the dataset
+#-------------------------------------------------------------------------------
+
+australia_map <- map_data("world", region = "Australia") # Load the map of Australia
+
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map, aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # All plots in the dataset
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree),
+             color = "darkgreen", size = 2) +
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +  # focus on Australia
+  theme_minimal() +
+  labs(title = "All vegetation survey plots in Australia",
+       x = "Longitude", y = "Latitude")
+
+
+#-------------------------------------------------------------------------------
+# Read the rangeland boundaries shapefile
+#-------------------------------------------------------------------------------
+
+shapefile_name <- "Australian_Rangeland_Boundaries.shp"
+rangeland_sf <- st_read(file.path(data_folder, shapefile_name))
+
+# Keep only polygons marked as RANGELANDS = 1
+rangeland_only_sf <- rangeland_sf %>%
+  filter(RANGELANDS == 1)
+
+# Convert plot table to simple features object
+plots_sf <- st_as_sf(plot_level_data,
+                     coords = c("longitude_Degree", "latitude_Degree"),
+                     crs = 4326)  # WGS84
+
+# Force both layers to EPSG:4326
+plots_sf <- st_transform(plots_sf, crs = 4326)
+rangeland_only_sf <- st_transform(rangeland_only_sf, crs = 4326)
+
+# Create a map to show the location of the rangeland boundaries
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Rangeland polygons
+  geom_sf(data = rangeland_only_sf, fill = "#FFF2B2", color = "gray60", size = 0.8, alpha = 0.6) +
+  coord_sf(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Australian rangelands boundaries",
+       x = "Longitude", y = "Latitude")
+
+
+#-------------------------------------------------------------------------------
+# Filter plots inside the rangeland boundaries
+#-------------------------------------------------------------------------------
+
+# Filter points inside the rangeland polygons
+intersect_matrix <- st_intersects(plots_sf, rangeland_only_sf, sparse = FALSE)
+points_inside <- apply(intersect_matrix, 1, any)
+plots_rangeland_sf <- plots_sf[points_inside, ]
+
+# Convert back to dataframe
+coords <- st_coordinates(plots_rangeland_sf) # Extract coordinates from the geometry
+
+plot_level_data <- plots_rangeland_sf %>%
+  dplyr::mutate(
+    longitude_Degree = coords[, "X"], # Add lon as separate column
+    latitude_Degree = coords[, "Y"] # Add lat as separate column
+  ) %>%
+  st_drop_geometry()  # drop the geometry
+
+# Create a map to show the locations of the rangeland plots
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Rangeland polygons 
+  geom_sf(data = rangeland_only_sf, fill = "#FFF2B2", color = "gray60", size = 0.8, alpha = 0.6) +
+  # Rangeland plots
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree),
+             color = "darkgreen", size = 2) +
+  coord_sf(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Vegetation survey plots within Australian rangelands boundaries",
+       x = "Longitude", y = "Latitude")
+
+# Remove temporary tables
+rm(plots_sf, plots_rangeland_sf)
+```
+
+## Calculate species richness
+This code calculates the number of plant species in each plot, i.e. species richness. 
+But first we need to clean the dataset: 
+1) Some sites were visited multiple times. For these sites we will keep only the data from the latest visit, so that each site contributes only one survey. 
+2) Remove NAs
+3) Remove plants that were not identified at least at the species level
+4) Check if there are any hybrids 
+5) For plants that are classified below the species level (e.g. subspecies, variety, etc...) convert the taxon into species
+
+```{r}
+library(dplyr)
+library(stringr)
+
+# For sites that have multiple site visits keep only the latest one
+vegetation_clean <- vegetation %>%
+  group_by(siteName) %>% # group rows for each site
+  filter(siteVisitName == max(siteVisitName)) %>% # keep rows only for the latest visit name within that site
+  ungroup() # remove grouping after filtering
+
+# Remove rows with NA in the 'taxon' column  
+vegetation_clean <- vegetation_clean %>%
+  filter(!is.na(taxon))
+
+# Remove rows where the plant was not identified at least at the species level
+vegetation_clean <- vegetation_clean %>%
+  filter(str_count(taxon, "\\S+") >= 3) # Keep only rows where 'taxon' has 3 or more words (e.g. it is identified at least at the species level)
+
+# Detect hybrids using either '×' or the word "hybrid"
+hybrids_count <- vegetation_clean %>%
+  filter(str_detect(taxon, "×|[Hh]ybrid")) %>%   # keep only hybrids
+  group_by(taxon) %>%                             # group by taxon
+  summarise(count = n(), .groups = "drop")       # count occurrences
+
+# Keep only the first two words of the column taxon, i.e. genus and species. These are the same whether the plant is identified at the species level or below (e.g. subspecies, variety, etc...)
+vegetation_clean <- vegetation_clean %>%
+    mutate(taxon = word(taxon, 1, 2))  # extract first two words
+
+# Calculate species richness
+richness_table <- vegetation_clean %>%
+  group_by(siteName) %>%
+  summarise(
+    species_richness = n_distinct(taxon),
+    .groups = "drop"
+  )
+
+# Join data into main dataframe, i.e. the column species_richness is added to the plot_level_data dataframe
+plot_level_data <- plot_level_data %>%
+  left_join(richness_table, by = "siteName")
+
+# Remove temporary tables
+rm(richness_table) 
+```
+These steps reduced the dataset by about 13,000 rows.
+Please note that our dataset did not contain NAs - we had already excluded them during the data selection. This step was included to show the complete workflow. 
+No hybrids were found, so we didn't need to decide how to handle them. 
+
+
+# TEMPERATURE
+The datasets used for this tutorial are: 
+
+Min temperature > Hutchinson, M., Kesteven, J. & Xu, T.. Monthly 1976-2005 mean daily minimum temperature: ANUClimate 1.0, 0.01 degree, Australian Coverage. Version 1. NCI Australia. Dataset. https://portal.tern.org.au/metadata/aabf33e8-8f3c-4f59-96c1-d1556348aed6 NCI Project: rr9 
+
+Max temperature > Hutchinson, M., Kesteven, J. & Xu, T.. Monthly 1976-2005 mean daily maximum temperature: ANUClimate 1.0, 0.01 degree, Australian Coverage. Version 1. NCI Australia. Dataset. https://portal.tern.org.au/metadata/4f724e1e-c799-43cf-882b-c32c7a98419d NCI Project: rr9 
+
+The datasets contain monthly-mean daily-minimum and -maximum temperature for the Australian continent between 1976-2005. Data were modelled by fitting trivariate thin plate smoothing spline functions of longitude, latitude and vertically exaggerated elevation to observed and estimated monthly 1976-2005 daily minimum and maximun temperature means at 1541 Bureau of Meteorology stations.
+
+Related metadata are available here:
+Min temperature > https://portal.tern.org.au/metadata/NCI/aabf33e8-8f3c-4f59-96c1-d1556348aed6
+
+Max temperature > https://portal.tern.org.au/metadata/NCI/4f724e1e-c799-43cf-882b-c32c7a98419d
+
+Temperature data are saved in netCDF files. 
+
+## Import min temperature data and extract values for the rangeland plots
+Individual netCDF files contain monthly-mean minimum-temperatures for Australia. The code extracts monthly values for each plot and calculates the min value.   
+```{r}
+library(terra)
+library(dplyr)
+library(ggplot2)
+
+# List all local NetCDF files containing "temperature-min" in the filename
+nc_files <- list.files(data_folder, pattern = "temperature-min.*\\.nc$", full.names = TRUE)
+
+# Sort files to ensure month order
+nc_files <- sort(nc_files)
+
+# Prepare coordinates from plot_level_data
+coords <- plot_level_data %>%
+  dplyr::select(longitude_Degree, latitude_Degree)
+
+# Convert to SpatVector for extraction
+plots_sf <- vect(coords, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
+
+# Extract values from each NetCDF file
+temp_matrix <- sapply(nc_files, function(f) {
+  r <- rast(f)
+  vals <- terra::extract(r, plots_sf)[, 2]  # second column = extracted value
+  return(vals)
+})
+
+# Convert to dataframe
+temp_df <- as.data.frame(temp_matrix)
+colnames(temp_df) <- paste0("month_", sprintf("%02d", 1:ncol(temp_df)))
+
+# Find the minimum temperature per site across all months
+plot_level_data$minimumTemperature_degreeCelsius <- apply(temp_df, 1, min, na.rm = TRUE)
+
+# Remove temporary tables
+rm(temp_df, temp_matrix)
+
+# Show the location of the plots, color coded by min temperature
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = minimumTemperature_degreeCelsius),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "blue", high = "white",
+                       name = "Min Temperature (°C)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Minimum temperature at plot locations",
+       x = "Longitude", y = "Latitude")
+
+
+```
+
+## Import max temperature data and extract values for the rangeland plots
+Individual netCDF files contain monthly-mean maximum-temperatures for Australia. The code extracts monthly values for each plot and calculates the max value.   
+```{r}
+library(terra)
+library(dplyr)
+library(ggplot2)
+
+# List all local NetCDF files containing "temperature-max" in the filename
+nc_files <- list.files(data_folder, pattern = "temperature-max.*\\.nc$", full.names = TRUE)
+
+# Sort files to ensure month order
+nc_files <- sort(nc_files)
+
+# Extract values from each NetCDF file
+temp_matrix <- sapply(nc_files, function(f) {
+  r <- rast(f)
+  vals <- terra::extract(r, plots_sf)[, 2]  # second column = extracted value
+  return(vals)
+})
+
+# Convert to dataframe
+temp_df <- as.data.frame(temp_matrix)
+colnames(temp_df) <- paste0("month_", sprintf("%02d", 1:ncol(temp_df)))
+
+# Find the maximum temperature per site across all months
+plot_level_data$maximumTemperature_degreeCelsius <- apply(temp_df, 1, max, na.rm = TRUE)
+
+# Remove temporary tables
+rm(temp_df, temp_matrix)
+
+# Show the location of the plots, color coded by max temperature
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = maximumTemperature_degreeCelsius),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "red",
+                       name = "Max Temperature (°C)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Maximum temperature at plot locations",
+       x = "Longitude", y = "Latitude")
+
+```
+
+
+## Plot species richness vs temperature data
+```{r}
+library(ggplot2)
+
+# Species richness vs min temperature
+ggplot(plot_level_data, aes(x = minimumTemperature_degreeCelsius, y = species_richness)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
+  labs(
+    x = "Minimum Temperature (°C)",
+    y = "Species Richness") +
+  theme_minimal()
+
+# Species richness vs monthly max temperature
+ggplot(plot_level_data, aes(x = maximumTemperature_degreeCelsius, y = species_richness)) +
+  geom_point(color = "red", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+  labs(
+    x = "Maximum Temperature (°C)",
+    y = "Species Richness") +
+  theme_minimal()
+
+```
+The plots suggest that:
+1) Species richness increases as the minimum temperature increases.
+2) There is no strong trend between species richness and maximum temperature. 
+
+
+# PRECIPITATION
+The dataset used for this tutorial is: 
+
+Hutchinson, M., Kesteven, J. & Xu, T.. Monthly 1976-2005 mean precipitation: ANUClimate 1.0, 0.01 degree, Australian Coverage. Version 1. NCI Australia. Dataset. https://portal.tern.org.au/metadata/3dc8c462-4605-45b4-8a76-7f96933f1610 NCI Project: rr9
+
+The dataset contain monthly-mean total precipitation for the Australian continent between 1976-2005. Data were modelled by fitting a trivariate thin plate smoothing spline function of longitude, latitude and vertically exaggerated elevation to the square roots of observed and estimated monthly 1976-2005 rainfall means at 11,697 Bureau of Meteorology stations.
+
+Related metadata are available here:
+https://portal.tern.org.au/metadata/NCI/3dc8c462-4605-45b4-8a76-7f96933f1610
+
+## ## Import precipitation data and extract values for the rangeland plots
+Precipitation data are saved in netCDF files. Individual netCDF files contain monthly-mean total precipitation for Australia. The code extracts monthly values for each plot and calculates the annual cumulative value.   
+```{r}
+library(terra)
+library(dplyr)
+library(ggplot2)
+
+# List all local NetCDF files containing "rainfall" in the filename
+nc_files <- list.files(data_folder, pattern = "rainfall.*\\.nc$", full.names = TRUE)
+
+# Sort files to ensure month order
+nc_files <- sort(nc_files)
+
+# Extract values from each NetCDF file
+temp_matrix <- sapply(nc_files, function(f) {
+  r <- rast(f)
+  vals <- terra::extract(r, plots_sf)[, 2]  # second column = extracted value
+  return(vals)
+})
+
+# Convert to dataframe
+temp_df <- as.data.frame(temp_matrix)
+colnames(temp_df) <- paste0("month_", sprintf("%02d", 1:ncol(temp_df)))
+
+# Sum mean-monthly precipitation values to obtain an annual value for each site
+plot_level_data$precipitationAnnualMean_millimetre <- apply(temp_df, 1, sum, na.rm = TRUE)
+
+# Remove temporary tables
+rm(temp_df, temp_matrix)
+
+# Show the location of the plots, color coded by precipitation 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = precipitationAnnualMean_millimetre),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "lightblue", high = "darkblue",
+                       name = "Precipitation (mm)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Annual precipitation at plot locations",
+       x = "Longitude", y = "Latitude")
+
+```
+
+
+## Plot species richness vs precipitation data
+```{r}
+library(ggplot2)
+
+# Species richness vs precipitation
+ggplot(plot_level_data, aes(x = precipitationAnnualMean_millimetre, y = species_richness)) +
+  geom_point(color = "lightblue", size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkblue") +
+  labs(
+    x = "Annual Precipitation (mm)",
+    y = "Species Richness") +
+  theme_minimal()
+
+```
+The plot suggests that species richness increases as annual precipitation increases. 
+
+
+# SOIL PARAMETERS
+The datasetS used for this tutorial are: 
+
+Searle, R., Nimalka Somarathna, P. & Malone, B. (2023). Soil and Landscape Grid National Soil Attribute Maps - Available Volumetric Water Capacity (Percent) (3 arc second resolution) Version 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/4jwj-na34     
+
+Malone, B. & Searle, R. (2022). Soil and Landscape Grid National Soil Attribute Maps - Clay (3" resolution) - Release 2. Version 2. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/hc4s-3130 
+
+Malone, B. & Searle, R. (2024). Soil and Landscape Grid National Soil Attribute Maps - Total Nitrogen (3" resolution) - Release 2. Version 2. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/pm2n-ww12 
+
+Malone, B. & Searle, R. (2024). Soil and Landscape Grid National Soil Attribute Maps - pH - Calcium Chloride (3" resolution) - Release 2. Version 2. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/7320-hw30
+
+Malone, B. & Searle, R. (2024). Soil and Landscape Grid National Soil Attribute Maps - Total Phosphorus (3" resolution) - Release 2. Version 2. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/7j78-md43 
+
+Malone, B. & Searle, R. (2022). Soil and Landscape Grid National Soil Attribute Maps - Silt (3" resolution) - Release 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/2ew1-0w57 
+
+Malone, B. & Searle, R. (2022). Soil and Landscape Grid National Soil Attribute Maps - Sand (3" resolution) - Release 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/rjmy-pa10 
+
+Wadoux, A., Dobarco, M., Malone, B., Minasny, B., McBratney, A. & Searle, R. (2024). Soil and Landscape Grid National Soil Attribute Maps - Organic Carbon (3" resolution) - Release 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/ejhm-c070
+
+
+These data are part of The Soil and Landscape Grid of Australia. Data were generated by applying standard Digital Soil Modelling (DSM) methods utilizing publicly available soil observation data and publicly available environmental covariate. A full description of the methodology can be found here https://aussoilsdsm.esoil.io/slga-version-2-products/soil-hydraulic-properties
+
+
+Related metadata are available here:
+
+Available Water Capacity > https://portal.tern.org.au/metadata/TERN/482301c2-b9a1-4345-b142-815f9b37890a 
+
+Clay > https://portal.tern.org.au/metadata/TERN/f95dc442-013b-4fad-b31f-91ba86fbe7f5
+
+Nitrogen > https://portal.tern.org.au/metadata/TERN/e9484508-c705-4c23-9195-f26d64b9d4f1
+
+pH > https://portal.tern.org.au/metadata/TERN/258afc98-7407-4781-b241-cb0293b4b8aa
+
+Phosphorus > https://portal.tern.org.au/metadata/TERN/be382e63-5ff6-40a9-930f-c84655a5bd87
+
+Silt > https://portal.tern.org.au/metadata/TERN/11375f04-b5cd-46a7-bcac-0e83fcb58605       
+
+Sand > https://portal.tern.org.au/metadata/TERN/4224ddff-5fb4-4170-b5ea-c0c500599700
+
+Organic Carbon> https://portal.tern.org.au/metadata/TERN/405bdb14-e7d2-4570-93c0-35f75d635f14
+
+
+File naming convention:
+
+SOC = Organic Carbon, i.e.	mass fraction of carbon by weight in the < 2 mm soil material as determined by dry combustion at 900° C 
+CLY =	Clay, i.e.< 2 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SLT = Silt, i.e.	2-20 um mass fraction of the < 2 mm soil material determined using the pipette method 	
+SND = Sand, i.e.	20 um - 2 mm mass fraction of the < 2 mm soil material determined using the pipette method 
+PHC = pH - CaCl2, i.e.	pH of 1:5 soil/0.01M calcium chloride extract 
+AWC = Available Water Capacity
+NTO = Total Nitrogen 
+PTO = Total Phosphorus
+
+Soil parameters are saved as .tif files. 
+
+## Import soil data and extract values for the rangeland plots
+```{r}
+library(terra)
+library(dplyr)
+
+# List all .tif files in the folder
+tif_files <- list.files(data_folder, pattern = "\\.tif$", full.names = TRUE)
+
+# Extract unique parameters from file names (first 3 letters)
+parameters <- unique(substr(basename(tif_files), 1, 3))
+
+# Create a SpatVector of plot locations
+plot_points <- vect(plot_level_data, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
+
+# Loop through each parameter
+for (param in parameters) {
+  
+  # Select all files for this parameter
+  param_files <- tif_files[substr(basename(tif_files), 1, 3) == param]
+  
+  # Load rasters
+  rasters <- rast(param_files)
+  
+  # Extract values at plot locations
+  values <- terra::extract(rasters, plot_points)[,-1]  # remove ID column
+  
+  # Add as new column to plot_level_data
+  plot_level_data[[param]] <- values
+}
+
+library(dplyr)
+
+# Rename columns
+plot_level_data <- plot_level_data %>%
+  rename(
+    availableWaterCapacity_percentage = AWC,
+    clay_percentage = CLY,
+    nitrogen_percentage = NTO,
+    pH = PHC,
+    phosphorus_percentage = PTO,
+    silt_percentage = SLT,
+    sand_percentage = SND,
+    organicCarbon_percentage = SOC
+  )
+
+# Remove temporary data
+rm(rasters, plot_points) 
+
+# Show the location of the plots, color coded by available water capacity 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = availableWaterCapacity_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Available water capacity (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Available water capacity at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by clay 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = clay_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Clay (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Clay at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by nitrogen 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = nitrogen_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Nitrogen (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Nitrogen at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by pH 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = pH),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "pH") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "pH at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by phosphorus 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = phosphorus_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Phosphorus (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Phosphorus at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by silt 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = silt_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Silt (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Silt at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by sand 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = sand_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Sand (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Sand at plot locations",
+       x = "Longitude", y = "Latitude")
+
+# Show the location of the plots, color coded by organicCarbon 
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = organicCarbon_percentage),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "brown",
+                       name = "Organic Carbon (percentage)") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Organic Carbon at plot locations",
+       x = "Longitude", y = "Latitude")
+
+```
+
+
+# Create graphs for each variable
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Variables of interest
+vars <- c(
+  "availableWaterCapacity_percentage",
+  "clay_percentage",
+  "nitrogen_percentage",
+  "pH",
+  "phosphorus_percentage",
+  "silt_percentage",
+  "sand_percentage",
+  "organicCarbon_percentage"
+)
+
+# Reshape your data from wide to long format
+# You want to plot the same relationship (e.g., species richness vs each soil variable) in a single call to ggplot(), with multiple facets — one facet for each variable. To do that, ggplot2 needs a single column to hold all soil variable values, and another column to indicate which variable they belong to.
+plot_long <- plot_level_data %>%
+  pivot_longer(
+    cols = all_of(vars),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+# Create the plot titles
+plot_long$variable <- factor(plot_long$variable,
+  levels = vars,
+  labels = c(
+    "Available Water Capacity (%)",
+    "Clay (%)",
+    "Nitrogen (%)",
+    "pH",
+    "Phosphorus (%)",
+    "Silt (%)",
+    "Sand (%)",
+    "Organic Carbon (%)"
+  )
+)
+
+# Plot species_richness vs each variable
+ggplot(plot_long, aes(x = value, y = species_richness)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred", linewidth = 0.8) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw() +
+  labs(
+    x = "Soil property value",
+    y = "Species richness"
+  )
+
+```
+The plots suggest that:
+1) Species richness decreases as clay, pH, and silt increase.
+2) Species richness increases as available water capacity, nitrogen, sand, and organic carbon increase. 
+3) There is no strong trend between species richness and phosphorus. 
+
+
+
+
+
+
+
+#Now to build the models
+
+First we install library packages for the build
+```{r}
+# load + install the packages as needed
+library(dplyr)
+#install.packages("performance")
+library(performance)
+
+```
+
+
+#Hold on! There is a very important step we need to do first. Because our preditor variables are on different scales e.g., percentages for soil covariates, soil pH, degrees celsius (max, min and annual mean), precipitation (mm). This means we need to scale or 'centre' these variables so that they can be compared easily between models.
+IMPORTANT : we are NOT centering site/visit IDs or dates.
+If we do a GLMM random effects this is handled by partitioning by site / date.
+
+#centre the predictors!
+
+```{r}
+
+#let's centre the predictors
+#I like to see the headers so I can know which columns I want to work with for my key predictions (this is done for you below - but if you were working with fresh data - it's a handy command).
+
+#first inspect the column headers
+head(plot_level_data)
+
+```
+#create a correlation matrix to understand the level of collinearity between our predictive variables
+
+We want to know how correlated our different predictive variables are before modelling. We already expect some correlation (e.g., soils tend to move together; min/max temps hug each other), and we also know that data collected at the same sites on the same day will be correlated. 
+
+It's a good idea to check correlations between predictors so we can drop/merge highly redundant ones and reduce the risk of multicollinearity. Multicollinearity = predictors telling the same story so strongly that coefficients become wobbly, standard errors inflate, and the model can look unstable.
+
+Why we just created “_z” versions (z-centred predictors): for each predictor X, we subtract its mean and divide by its standard deviation: X_z = (X − mean(X)) / sd(X). This doesn’t change the relationships in the data; it simply puts everything on a common, unitless scale. Benefits: coefficients become comparable (“effect per 1 SD change”) across % vs mm vs °C, models tend to converge more easily (especially GLMs/GLMMs), and any interactions we add later are easier to interpret. 
+
+We did not centre IDs like site/visit or dates as we only have one visit per site. If we had multiple site visits we could use site as a random effect within a GLMM 
+
+We’ll use the corresponding *_z columns for the correlations and for the model formulas so everything is on the same footing.
+
+#Here is the list of headers we want to use for this step (note - of course some will be autocorrelated):
+
+maximumTemperature_degreeCelsius 
+minimumTemperature_degreeCelsius 
+temperatureAnnualMean_degreeCelsius 
+precipitationAnnualMean_millimetre 
+availableWaterCapacity_percentage 
+clay_percentage nitrogen_percentage 
+pH 
+phosphorus_percentage 
+silt_percentage 
+sand_percentage 
+organicCarbon_percentage
+
+#
+
+```{r}
+# now that we have the columns / headers we need - let's centre the predictors
+# centre the predictors (add *_z columns directly to plot_level_data)
+# use the headers determined above:
+
+pred_vars <- c(
+"maximumTemperature_degreeCelsius",
+"minimumTemperature_degreeCelsius",
+"temperatureAnnualMean_degreeCelsius",
+"precipitationAnnualMean_millimetre",
+"availableWaterCapacity_percentage",
+"clay_percentage",
+"nitrogen_percentage",
+"pH",
+"phosphorus_percentage",
+"silt_percentage",
+"sand_percentage",
+"organicCarbon_percentage"
+)
+
+# 1) coerce those columns to numeric (only if they exist)
+
+plot_level_data <- plot_level_data |>
+dplyr::mutate(
+dplyr::across(dplyr::any_of(pred_vars), ~ suppressWarnings(as.numeric(.x)))
+)
+
+# 2) create centred (z-scored) versions in-place (again, only for columns that exist)
+
+plot_level_data <- plot_level_data |>
+dplyr::mutate(
+dplyr::across(dplyr::any_of(pred_vars), ~ as.numeric(scale(.x)), .names = "{.col}_z")
+)
+
+# quick peek (optional): which *_z columns did we just create?
+
+created_z <- paste0(pred_vars, "_z")
+intersect(created_z, names(plot_level_data))
+
+```
+
+#Now we're ready to run the collinearity check
+
+```{r}
+# Correlation matrix on our centred predictors (the *_z columns)
+
+# 1) List the predictor headers we care about (exactly as in your sheet)
+
+pred_vars <- c(
+"maximumTemperature_degreeCelsius",
+"minimumTemperature_degreeCelsius",
+"temperatureAnnualMean_degreeCelsius",
+"precipitationAnnualMean_millimetre",
+"availableWaterCapacity_percentage",
+"clay_percentage",
+"nitrogen_percentage",
+"pH",
+"phosphorus_percentage",
+"silt_percentage",
+"sand_percentage",
+"organicCarbon_percentage"
+)
+
+# 2) Use the centred versions for correlation
+
+preds_z <- intersect(paste0(pred_vars, "_z"), names(plot_level_data))
+
+if (length(preds_z) >= 2) {
+
+# Spearman correlation is robust for eco predictors
+
+cor_mat <- suppressWarnings(
+cor(
+plot_level_data[, preds_z, drop = FALSE],
+use = "pairwise.complete.obs",
+method = "spearman"
+)
+)
+print(round(cor_mat, 2))
+} else {
+message("Not enough centred predictors found to compute a correlation matrix (need at least 2).")
+}
+
+# Optional: a quick pairs plot (uncomment if you want a visual)
+
+# pairs(plot_level_data[, preds_z, drop = FALSE], pch = 16)
+
+# Optional: VIF diagnostic using 'car' (uncomment the two lines below if you want VIFs)
+
+# install.packages("car")  # run once
+
+# car::vif(lm(species_richness ~ ., data = cbind(species_richness = plot_level_data$species_richness,
+
+# plot_level_data[, preds_z, drop = FALSE])))
+
+
+
+```
+
+
+#fantastic - we can see there is some colliearity between predictors we expected e.g., temperatures / soil sand / silt clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. E.g., if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
+
+#let's visualise the correlations between predictors so it's easier to visually determine which to remove
+
+```{r}
+pred_vars <- c(
+"maximumTemperature_degreeCelsius",
+"minimumTemperature_degreeCelsius",
+"temperatureAnnualMean_degreeCelsius",
+"precipitationAnnualMean_millimetre",
+"availableWaterCapacity_percentage",
+"clay_percentage",
+"nitrogen_percentage",
+"pH",
+"phosphorus_percentage",
+"silt_percentage",
+"sand_percentage",
+"organicCarbon_percentage"
+)
+
+#use the centred versions for correlation
+
+preds_z <- paste0(pred_vars, "_z")
+
+#compute Spearman correlations
+
+cm <- suppressWarnings(cor(
+plot_level_data[, preds_z, drop = FALSE],
+use = "pairwise.complete.obs",
+method = "spearman"
+))
+
+#print numeric matrix (rounded)
+
+print(round(cm, 2))
+
+#visual heatmap (corrplot)
+#install.packages("corrplot") # run once if you don't have it
+
+library(corrplot)
+
+pred_vars <- c(
+"maximumTemperature_degreeCelsius","minimumTemperature_degreeCelsius",
+"temperatureAnnualMean_degreeCelsius","precipitationAnnualMean_millimetre",
+"availableWaterCapacity_percentage","clay_percentage","nitrogen_percentage","pH",
+"phosphorus_percentage","silt_percentage","sand_percentage","organicCarbon_percentage"
+)
+preds_z <- paste0(pred_vars, "_z")
+
+cm <- suppressWarnings(cor(
+plot_level_data[, preds_z, drop = FALSE],
+use = "pairwise.complete.obs",
+method = "spearman"
+))
+
+#draw the heatmap inline (NO windows()/quartz()/x11())
+
+corrplot(
+cm,
+method = "color",
+type = "upper",
+diag = FALSE,
+order = "hclust",
+addCoef.col = "black",
+number.cex = 0.55, # smaller numbers
+tl.cex = 0.65, # smaller labels
+tl.srt = 45, # angled labels
+mar = c(0,0,1,0)
+)
+
+```
+
+#Which predictors to remove? Here is where our knowledge of plant ecosystems comes into play
+As clay and silt are highly positively correlated (0.93), while sand and silt are highly negatively correlated (-0.99)
+Let's remove silt and run separate models with sand and clay separately as they may have interesting effects on plant richness.
+
+Temperature values are also (logically) correlated. As temp annual mean is correlated with both temp maxiumum and temp minimum - let's remove the average temp.
+
+Nitrogen is also highlighted as correlated with organic Carbon (again logically) as plant available nitrogen is a key plant limiting soil nutrient - let's cut organic Carbon.
+
+Removing correlated predictors reduces our risk of an overfitted model + multicollinearity! 
+
+#What does this mean?
+
+With too many, highly redundant predictors, the model starts “fitting noise.” Coefficients become unstable, standard errors inflate, and signs can flip with small data changes. You might get impressive in-sample fit, but poor generalisation out-of-sample. Pruning correlated predictors (what you’re doing) reduces this risk and makes predictor effects more interpretable.
+
+#As sand and clay are highly negatively correlated we might want to check the VIF (variance inflation factor for these before we start modelling)
+
+```{r}
+#Option A — keep clay + sand (drop silt, mean temp, organic C)
+
+preds_z <- c(
+"minimumTemperature_degreeCelsius_z",
+"maximumTemperature_degreeCelsius_z",
+"precipitationAnnualMean_millimetre_z",
+"availableWaterCapacity_percentage_z",
+"clay_percentage_z",
+"sand_percentage_z",
+"nitrogen_percentage_z",
+"pH_z",
+"phosphorus_percentage_z"
+)
+
+preds_z <- intersect(preds_z, names(plot_level_data))
+
+# build X matrix and keep complete rows
+
+X <- as.matrix(plot_level_data[, preds_z, drop = FALSE])
+X <- X[stats::complete.cases(X), , drop = FALSE]
+
+# correlation matrix among predictors
+
+
+R <- suppressWarnings(cor(X, use = "pairwise.complete.obs", method = "pearson"))
+
+# VIF for standardised predictors is diag(solve(R)); fall back to pseudo-inverse if needed
+
+invR <- tryCatch(solve(R), error = function(e) {
+if (!requireNamespace("MASS", quietly = TRUE)) {
+stop("Matrix is singular; install.packages('MASS') to use a pseudo-inverse.")
+}
+MASS::ginv(R)
+})
+
+vif_vals <- diag(invR)
+
+# tidy table with flags
+
+out <- data.frame(term = colnames(X), VIF = as.numeric(vif_vals))
+out <- out[order(-out$VIF), ]
+out$flag <- ifelse(out$VIF > 10, ">10 (problematic)",
+ifelse(out$VIF > 5, ">5 (concerning)", ""))
+print(out, row.names = FALSE)
+
+```
+
+# sand and clay are highly negatively correlated. So as noted above let's run separate models for these
+ 
+# Fantastic - We are ready to create our models
+
+#We only have 1 visit per site across 785 sites so we do not need to use a GLMM and partition the site visits using random effect e.g., (1 | siteName)
+
+Therefore, we use a standard GLM (Generalized Linear Model) with appropriate
+distribution families to handle our response variables.
+
+# Note: If we had multiple visits per site, a GLMM would be appropriate to 
+ account for site-level correlation and unmeasured heterogeneity (e.g., soil 
+ history, management, microclimate).
+
+# --- Distribution Family Choices ---
+
+# Our two response variables have different distributions:
+
+# 1. SPECIES RICHNESS (count data: 0, 1, 2, 3, ...)
+    - Natural families: Poisson or Negative Binomial
+    - Ecological count data is typically OVERDISPERSED (variance > mean)
+    - Poisson assumes variance = mean (too restrictive for ecological data)
+    - NEGATIVE BINOMIAL allows variance > mean → better fit for species counts
+    - We use: glm.nb() with family = Negative Binomial
+
+# 2. SIMPSON DIVERSITY INDEX (SDI) (continuous proportion: 0 to 1)
+    - Natural family: Beta distribution (via betareg or mgcv::betar())
+    - Beta distribution models continuous (0,1) responses with flexible shapes
+    - NOT appropriate: Binomial (for binary 0/1 or count/total outcomes)
+    - NOT appropriate: Gaussian (assumes unbounded continuous data)
+    - We use: Beta regression for SDI models
+
+# Summary: Use Negative Binomial GLM for species richness counts,
+#          and Beta GLM for Simpson Diversity Index proportions.
+
+#First let's check for incomplete rows - as the models will not converge if there are missing data
+
+```{r}
+#check for missing data:
+# Check how many complete cases we have
+cat("Rows in plot_level_data:", nrow(plot_level_data), "\n")
+
+# Check if SDI has NAs
+cat("NAs in SDI:", sum(is.na(plot_level_data$SDI)), "\n")
+
+# ============================================================================
+# CHECK FOR INCOMPLETE CASES IN plot_level_data (NO REMOVAL)
+# ============================================================================
+
+# Check which columns we need for models
+model_cols <- c(
+  "species_richness",
+  "SDI",
+  "minimumTemperature_degreeCelsius_z",
+  "maximumTemperature_degreeCelsius_z",
+  "precipitationAnnualMean_millimetre_z",
+  "availableWaterCapacity_percentage_z",
+  "clay_percentage_z",
+  "sand_percentage_z",
+  "nitrogen_percentage_z",
+  "pH_z",
+  "phosphorus_percentage_z"
+)
+
+# Count NAs in each column
+cat("=== CHECKING FOR MISSING DATA ===\n")
+for (col in model_cols) {
+  n_missing <- sum(is.na(plot_level_data[[col]]))
+  cat(sprintf("%-45s: %d NAs\n", col, n_missing))
+}
+
+# Count complete cases
+complete_rows <- complete.cases(plot_level_data[, model_cols])
+cat("\nTotal rows:", nrow(plot_level_data), "\n")
+cat("Complete cases:", sum(complete_rows), "\n")
+cat("Incomplete cases:", sum(!complete_rows), "\n")
+
+  
+```
+
+#we do have 14 incomplete rows - let's create a data subset to use in our models mod_df
+
+```{r}
+#create mod_df
+
+needed <- c(
+"species_richness",
+"siteName",
+"minimumTemperature_degreeCelsius_z",
+"maximumTemperature_degreeCelsius_z",
+"precipitationAnnualMean_millimetre_z",
+"availableWaterCapacity_percentage_z",
+"clay_percentage_z",
+"sand_percentage_z",
+"nitrogen_percentage_z",
+"pH_z",
+"phosphorus_percentage_z"
+)
+
+#subset to those columns
+
+mod_df <- plot_level_data[, needed, drop = FALSE]
+
+#count rows before/after removing incomplete cases (this is where the ~14 rows go)
+
+n_before <- nrow(mod_df)
+mod_df <- mod_df[stats::complete.cases(mod_df), , drop = FALSE]
+n_after <- nrow(mod_df)
+
+#make sure site is a clean factor
+
+mod_df$siteName <- droplevels(factor(mod_df$siteName))
+
+#quick audit to the console
+
+cat("Model DF rebuilt: ", n_before, "rows ->", n_after, "rows (dropped", n_before - n_after, "incomplete rows)\n")
+
+#sanity checks
+
+stopifnot(all(mod_df$species_richness >= 0, na.rm = TRUE))
+
+```
+```{r}
+
+##let's start with species richness response and clay as a predictor
+
+library(MASS)  # for negative binomial GLM
+
+# Since each site has only 1 observation, use GLM (no random effects)
+
+# Model with Negative Binomial family (handles overdispersion)
+m_rich_clay <- glm.nb(
+  species_richness ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    clay_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z,
+  data = mod_df
+)
+
+# Check the model
+summary(m_rich_clay)
+
+```
+```{r}
+
+# Check for overdispersion and model fit
+cat("Dispersion parameter (theta):", m_rich_clay$theta, "\n")
+
+# Model diagnostics
+par(mfrow = c(2, 2))
+plot(m_rich_clay)
+
+# Pearson residuals
+pr_clay <- residuals(m_rich_clay, type = "pearson")
+qqnorm(pr_clay)
+qqline(pr_clay, col = "red")
+
+# DHARMa diagnostics (works with GLMs too)
+library(DHARMa)
+sim_clay <- simulateResiduals(m_rich_clay, n = 1000)
+plot(sim_clay)
+testDispersion(sim_clay)
+testZeroInflation(sim_clay)
+
+```
+#model fit is fairly good
+#wow some interesting results for the clay model - what is your interpretation? We'd love to hear it.
+
+##ECOLOGICAL STORY TO BE DELETED FROM WORKSHOP VERSION##
+
+#Key Ecological Story:
+Your rangeland plant diversity is primarily driven by temperature extremes (the min/max temp effects are opposite and strongest) and soil chemistry (pH, clay). 
+
+The results suggest that diversity is highest under moderate conditions — where minimum temperatures are warm enough to avoid cold stress, maximum temperatures are cool enough to avoid heat stress, and soils are moderately acidic with lower clay content.
+
+The fact that precipitation wasn’t significant is interesting. It suggests that, in your dataset, temperature stress may be a stronger filter on diversity than water availability. This could make sense if most sites are already in water-limited rangelands where species are adapted to low rainfall, but temperature extremes still shape which species can persist.
+
+#Model Performance
+
+Good model fit: The reduction from null deviance (1136.99) to residual deviance (796.15) shows your predictors explain a substantial portion of variation in species richness
+Theta = 7.38: This indicates moderate overdispersion is present (if it were very high, like >50, you'd be close to Poisson; low values indicate more overdispersion). The negative binomial is definitely the right choice here.
+DHARMa diagnostics look great: No dispersion issues (p=0.24) and no zero-inflation problems (p=1.0)
+
+Significant Predictors:
+Minimum Temperature (positive effect, p < 0.001)*
+
+Coefficient: +0.121
+Interpretation: For each 1 SD increase in minimum temperature, species richness increases by ~12.9% (exp(0.121) = 1.129)
+Ecological meaning: Warmer minimum temps (less cold stress) → more species
+
+#Maximum Temperature (negative effect, p < 0.001)*
+
+Coefficient: -0.188
+Interpretation: For each 1 SD increase in maximum temperature, species richness decreases by ~17.1% (exp(-0.188) = 0.829)
+Ecological meaning: Extreme heat stress → fewer species can tolerate conditions
+
+#pH (negative effect, p < 0.001)*
+
+Coefficient: -0.139
+Interpretation: For each 1 SD increase in pH (more alkaline), species richness decreases by ~13.0% (exp(-0.139) = 0.870)
+Ecological meaning: More acidic soils support higher diversity in these rangelands
+
+#Clay percentage (negative effect, p = 0.006)
+
+Coefficient: -0.044
+Interpretation: For each 1 SD increase in clay, species richness decreases by ~4.3% (exp(-0.044) = 0.957)
+Ecological meaning: Heavier clay soils → lower diversity (possibly due to drainage/aeration issues)
+
+#Phosphorus (marginally significant, p = 0.054)
+
+Coefficient: -0.049
+Interpretation: Borderline negative effect; higher P → slightly fewer species
+Ecological meaning: Could indicate competitive exclusion at high nutrient levels, but interpret cautiously
+
+#Non-significant Predictors:
+
+Precipitation (p = 0.68): Surprisingly not significant - possibly because temperature already captures moisture stress, or your sites don't span a wide enough precipitation gradient
+Available Water Capacity (p = 0.11): Marginal but not quite significant
+Nitrogen (p = 0.61): No effect
+Sand/Silt (not in model - excluded due to collinearity with clay)
+
+
+#let's check species richness against the same glm but with sand substiuted for sand
+
+```{r}
+
+# ============================================================================
+# SPECIES RICHNESS ~ SAND MODEL
+# ============================================================================
+
+library(MASS)  # for glm.nb()
+library(DHARMa)  # for diagnostics
+
+######################run this extra bit if sand df has dissapeared
+# Quick fix: just add the sand column to mod_df
+#mod_df$sand_percentage_z <- plot_level_data$sand_percentage_z[
+#  match(mod_df$siteName, plot_level_data$siteName)
+#]
+
+# Verify it worked
+#cat("sand_percentage_z added to mod_df\n")
+#cat("NAs:", sum(is.na(mod_df$sand_percentage_z)), "\n")
+#cat("Range:", range(mod_df$sand_percentage_z, na.rm = TRUE), "\n")
+
+
+# --- Fit Negative Binomial GLM with SAND as predictor ---
+m_rich_sand <- glm.nb(
+  species_richness ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    sand_percentage_z +  
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z,
+  data = mod_df
+)
+
+# --- Model summary ---
+summary(m_rich_sand)
+
+
+
+```
+#let's check model fit
+
+```{r}
+# --- Check dispersion parameter ---
+cat("\nDispersion parameter (theta):", m_rich_sand$theta, "\n\n")
+
+# --- Visual diagnostics ---
+par(mfrow = c(2, 2))
+plot(m_rich_sand)
+
+# --- Pearson residuals QQ plot ---
+pr_sand <- residuals(m_rich_sand, type = "pearson")
+qqnorm(pr_sand, main = "QQ Plot: Species Richness ~ Sand Model")
+qqline(pr_sand, col = "red")
+
+# --- DHARMa diagnostics ---
+sim_sand <- simulateResiduals(m_rich_sand, n = 1000)
+plot(sim_sand, main = "DHARMa: Species Richness ~ Sand Model")
+testDispersion(sim_sand)
+testZeroInflation(sim_sand)
+
+```
+
+
+#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage + more available nutrients = higher diversity. Both models are essentially equivalent in explanatory power.
+
+#Ecological Story
+rangeland species richness is maximized in:
+
+Sandier soils (better drainage, aeration, + likely more available nutrients)
+Warmer minimum temps (less cold stress)
+Cooler maximum temps (less heat stress)
+More acidic pH (lower pH values)
+Lower phosphorus (possibly reduced competitive dominance)
+
+Since sand and clay are just mirror images of the same gradient, possibly pick one model (probably sand, since it has slightly lower AIC and phosphorus becomes significant). 
+
+#Pick the best model / model selection for species richness
+
+```{r}
+
+# Choose the sand model (slightly better AIC, phosphorus significant)
+# Mention clay in text as supporting evidence
+
+cat("=== MODEL SELECTION ===\n")
+cat("Clay model AIC:", AIC(m_rich_clay), "\n")
+cat("Sand model AIC:", AIC(m_rich_sand), "\n")
+cat("Difference:", abs(AIC(m_rich_clay) - AIC(m_rich_sand)), "\n")
+cat("\nAIC difference < 2 indicates models are essentially equivalent.\n")
+cat("Choosing SAND model (marginally lower AIC, clearer P effect).\n")
+cat("Clay shows inverse pattern as expected (r = -0.XX between sand/clay).\n")
+
+```
+#summary## - Elisa should we delete - I feel in the interests of time probably delete? 
+
+```{r}
+# ============================================================================
+# FINAL MODEL SELECTION: SPECIES RICHNESS
+# ============================================================================
+
+cat("=== SPECIES RICHNESS MODEL SELECTION ===\n\n")
+
+cat("Clay vs Sand comparison:\n")
+cat("  Clay model AIC:", round(AIC(m_rich_clay), 2), "\n")
+cat("  Sand model AIC:", round(AIC(m_rich_sand), 2), "\n")
+cat("  ΔAIC =", round(abs(AIC(m_rich_clay) - AIC(m_rich_sand)), 2), "\n\n")
+
+cat("Decision: SAND model selected (ΔAIC < 2 = models equivalent)\n")
+cat("Sand and clay are negatively correlated and represent\n")
+cat("opposite ends of the same soil texture gradient.\n\n")
+
+# Calculate correlation between sand and clay
+cor_sand_clay <- cor(mod_df$sand_percentage_z, 
+                      plot_level_data$clay_percentage_z[
+                        match(mod_df$siteName, plot_level_data$siteName)
+                      ], 
+                      use = "complete.obs")
+
+cat("Correlation between sand and clay:", round(cor_sand_clay, 3), "\n\n")
+
+cat("Final species richness model uses SAND percentage.\n")
+cat("Key findings:\n")
+cat("  • Sand (+): β = +0.047, p = 0.005 → sandier soils = higher richness\n")
+cat("  • Min temp (+): β = +0.118, p < 0.001 → warmer minimums = higher richness\n")  
+cat("  • Max temp (−): β = -0.185, p < 0.001 → cooler maximums = higher richness\n")
+cat("  • pH (−): β = -0.138, p < 0.001 → more acidic soils = higher richness\n")
+cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richness\n\n")
+
+
+```
+#now the SDI (simpson's diversity index) models
+
+
+```{r}
+
+#1) SDI and clay
+
+# ============================================================================
+# SDI ~ CLAY MODEL
+# ============================================================================
+
+library(betareg)
+library(statmod)
+
+m_SDI_clay <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    clay_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z,
+  data = plot_level_data
+)
+
+cat("=== SDI ~ CLAY MODEL ===\n")
+summary(m_SDI_clay)
+
+
+```
+#check model fit
+
+```{r}
+# Diagnostics
+
+# SDI ~ CLAY
+par(mfrow = c(1, 2))
+plot(m_SDI_clay, which = 1)   # residuals vs fitted  (OK)
+plot(m_SDI_clay, which = 4)   # leverage/Cook's      (OK)
+
+# Manual QQ + Pearson residuals (kept)
+par(mfrow = c(1, 2))
+res_clay <- residuals(m_SDI_clay, type = "pearson")
+fit_clay <- fitted(m_SDI_clay)
+plot(fit_clay, res_clay, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
+qqnorm(res_clay, main = "QQ: Pearson residuals (CLAY)"); qqline(res_clay, col="red")
+
+
+
+
+```
+#model fit interpretation
+🧩 1. Why the QQ plot might look odd
+
+A slightly curved or scattered QQ line in betareg residuals is normal because:
+
+Residuals are not expected to be normal — the model uses a beta (bounded 0–1) likelihood, not a Gaussian one.
+
+The residuals depend on the mean–variance relationship, which can change with predictors.
+So, unlike a linear model, you don’t expect a perfect straight QQ line.
+
+In short: a “wonky” QQ plot isn’t automatically a problem here.
+
+#however! the residuals vs linear does have a funnel shape so we are going to test this with a “precision” (phi) sub-model
+
+# In beta regression, φ (phi) controls the precision or spread of values around the mean (μ).
+# By default, φ is constant (equal variability for all observations).
+# A "phi model" lets φ vary with predictors when residuals show changing spread (heteroskedasticity).
+# This improves fit and reveals where SDI is more or less consistent across environments.
+# μ model → predicts mean SDI; φ model → predicts variability of SDI.
+
+
+```{r}
+m_SDI_clay_phi <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    clay_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z |
+    clay_percentage_z + maximumTemperature_degreeCelsius_z,   # precision model
+  data = plot_level_data
+)
+
+summary(m_SDI_clay_phi)
+
+AIC(m_SDI_clay, m_SDI_clay_phi)
+
+```
+#interesting!
+Because residual variance increased with the fitted values, we allowed the precision parameter (φ) to vary with environmental predictors.
+The variable-precision model provided a substantially better fit (ΔAIC = 28), indicating that SDI variability changes systematically across environmental gradients.
+
+##let's recheck model fit
+
+```{r}
+# --- Re-check fit for phi model ------------------------------------------
+# Diagnostics: same 4 plots as before (but for the phi model)
+par(mfrow = c(2, 2))
+plot(m_SDI_clay_phi, which = 1:4)
+
+# Extra quick looks
+par(mfrow = c(1, 2))
+# Pearson residuals vs fitted (should look like random noise; funnel should be reduced)
+res_phi <- residuals(m_SDI_clay_phi, type = "pearson")
+fit_phi <- fitted(m_SDI_clay_phi)
+plot(fit_phi, res_phi, xlab = "Fitted (mu)", ylab = "Pearson residuals",
+     main = "Residuals vs Fitted (phi model)")
+abline(h = 0, lty = 2)
+
+# QQ plot of Pearson residuals (wonky is OK in beta; looking for major deviations)
+qqnorm(res_phi, main = "QQ: Pearson residuals (phi model)")
+qqline(res_phi, col = "red")
+
+# Compare to constant-phi model via LR test and AIC (confirms improvement)
+library(lmtest)
+print(lrtest(m_SDI_clay, m_SDI_clay_phi))
+AIC(m_SDI_clay, m_SDI_clay_phi)
+
+```
+
+#let's check the model summary table for this better phi model
+
+```{r}
+# --- Inspect model summary tables ----------------------------------------
+s <- summary(m_SDI_clay_phi)
+s  # full console summary (includes pseudo R^2, logLik, etc.)
+cat("Pseudo R^2 (McFadden):", round(s$pseudo.r.squared, 3), "\n")
+```
+
+#SDI ~ clay predictors model interpretation:
+
+The variable-precision beta regression indicated that diversity–evenness (SDI) is most strongly influenced by temperature extremes.
+Minimum temperature had a positive effect, while maximum temperature had a strong negative effect on SDI, suggesting that diversity is highest under moderate temperature conditions — warm enough to avoid cold stress but not so hot that heat stress reduces evenness.
+Available water capacity showed a modest positive effect, while clay had a weak negative trend.
+
+The precision (φ) submodel revealed that SDI variability increases under hotter maximum temperatures, indicating that diversity patterns become less consistent as temperature stress intensifies.
+
+Together, these results show that temperature drives both the mean and variability of community evenness, while soil properties play secondary roles.
+
+
+#let's move onto the model for SDI ~ sand + predictors
+
+```{r}
+# ============================================================================
+# SDI ~ SAND MODEL
+# ============================================================================
+
+m_SDI_sand <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    sand_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z,
+  data = plot_level_data
+)
+
+cat("\n=== SDI ~ SAND MODEL ===\n")
+summary(m_SDI_sand)
+
+
+```
+
+#let's check model fit
+```{r}
+# SDI ~ SAND
+par(mfrow = c(1, 2))
+plot(m_SDI_sand, which = 1)   # residuals vs fitted
+plot(m_SDI_sand, which = 4)   # leverage/Cook's
+
+# Manual QQ + Pearson residuals (kept)
+par(mfrow = c(1, 2))
+res_sand <- residuals(m_SDI_sand, type = "pearson")
+fit_sand <- fitted(m_SDI_sand)
+plot(fit_sand, res_sand, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
+qqnorm(res_sand, main = "QQ: Pearson residuals (SAND)"); qqline(res_sand, col="red")
+
+
+```
+
+#again we have a bit of funnel shape - let's fit the phi model and compare
+
+```{r}
+# === Fit variable-precision (phi) model for SAND ===
+m_SDI_sand_phi <- betareg(
+  SDI ~
+    minimumTemperature_degreeCelsius_z +
+    maximumTemperature_degreeCelsius_z +
+    precipitationAnnualMean_millimetre_z +
+    availableWaterCapacity_percentage_z +
+    sand_percentage_z +
+    nitrogen_percentage_z +
+    pH_z +
+    phosphorus_percentage_z |
+    sand_percentage_z + maximumTemperature_degreeCelsius_z,   # phi submodel
+  data = plot_level_data
+)
+
+# Compare with LR test and AIC (as done for clay)
+library(lmtest)
+print(lrtest(m_SDI_sand, m_SDI_sand_phi))
+AIC(m_SDI_sand, m_SDI_sand_phi)
+
+
+```
+#which one to keep?
+ΔAIC ≈ 29 (–827.4 vs –798.0) → the variable-precision - phi model fits much better.
+
+Likelihood ratio test: χ² = 33.37, df = 2, p < 0.001 → highly significant improvement.
+
+This tells us the precision (φ) varies systematically with sand and maximum temperature—just like it did with clay.
+In other words, SDI variability isn’t constant: it changes across sandier and hotter environments.
+
+
+#check model fit
+
+```{r}
+# === MODEL FIT CHECK: SDI ~ SAND (phi model) ==============================
+
+# Supported base plots for betareg (which = 1 and 4 only)
+par(mfrow = c(1, 2))
+plot(m_SDI_sand_phi, which = 1)  # Residuals vs fitted
+plot(m_SDI_sand_phi, which = 4)  # Leverage/Cook's distance
+
+# Additional custom diagnostic plots (same as clay)
+par(mfrow = c(1, 2))
+res_sand_phi <- residuals(m_SDI_sand_phi, type = "pearson")
+fit_sand_phi <- fitted(m_SDI_sand_phi)
+
+# Residuals vs fitted (to check funnel pattern)
+plot(fit_sand_phi, res_sand_phi,
+     xlab = "Fitted (mu)",
+     ylab = "Pearson residuals",
+     main = "Residuals vs Fitted (SAND, phi model)")
+abline(h = 0, lty = 2, col = "grey40")
+
+# QQ plot (shape can be slightly curved in beta models)
+qqnorm(res_sand_phi, main = "QQ: Pearson residuals (SAND, phi model)")
+qqline(res_sand_phi, col = "red", lty = 2)
+
+```
+#it's a better fit - let's check the phi SDI ~ sand model
+```{r}
+# === MODEL SUMMARY: SDI ~ SAND (phi model) ===============================
+
+# View full model summary
+summary(m_SDI_sand_phi)
+```
+
+#sand phi model interpretation:
+Temperature sets the tone. SDI (evenness/diversity) is highest where minimum temps are warmer and maximum temps are cooler (μ: min T +, max T −; both significant). That’s a “moderate temperatures = more even communities” story.
+
+Soil water matters. Available water capacity has a negative coefficient (μ), indicating lower AWC → higher evenness (significant). In these rangelands, places with less plant-available water tend to have communities that are more even.
+
+Texture signal from sand. Sand % is positive and significant in the φ model: μ: sand + (significant) → sandier sites show slightly higher evenness after controlling for climate and chemistry.
+
+Rainfall is secondary. Precipitation is only marginal (μ, p≈0.07), consistent with temperature extremes being the stronger filter here.
+
+Variance tells an extra story (φ model). Max temperature strongly reduces φ (φ: max T −, p<0.001), meaning hotter sites have more variable SDI (less predictable evenness). Sand’s effect on φ is small/non-sig, so most variance changes are tied to heat rather than texture.
+
+One-liner: In these sandier rangelands, community evenness is highest under warm nights, cooler days, and lower AWC, with a modest boost from sandiness; heat stress not only lowers evenness on average, it also makes it more variable across sites.
+
+
+#The Overall Ecological Story:
+#Elisa - let's check that this actually makes sense - can you read and see if the interpretation makes sense?#
+
+#Species Richness:
+Species richness is highest on coarse-textured, acidic, low-phosphorus soils—conditions typical of freely draining sandy substrates. These soils reduce competitive exclusion and favour the coexistence of many stress-tolerant species. Temperature also influences richness, but soil texture and chemistry act as the primary environmental filters.
+
+#Diversity (SDI):
+Once species are established, temperature extremes control community evenness: warmer minimum temperatures enhance evenness, while hotter maximum temperatures reduce it. Lower water-holding capacity (AWC) is associated with higher evenness, consistent with environments where limited resources prevent dominance by a few species.
+
+#Variance (φ model):
+Hotter conditions increase the variability of SDI across sites, suggesting that heat stress not only lowers evenness on average but also makes community structure less predictable.
+
+
+#let's create a summary plot of all 4 models
+
+```{r}
+# === Clean coefficient plotting (robust; handles betareg + NB; no Log(nu)) ==
+library(ggplot2)
+library(dplyr)
+library(stringr)
+
+.extract_coef_table <- function(model) {
+  # Returns a data.frame with columns: term, estimate, se
+  if (inherits(model, "betareg")) {
+    # 1) Try broom tidy (mean component only)
+    td <- try({
+      if (requireNamespace("broom", quietly = TRUE)) {
+        broom::tidy(model, component = "mean", conf.int = FALSE)
+      } else NULL
+    }, silent = TRUE)
+    if (inherits(td, "data.frame") && all(c("term","estimate","std.error") %in% names(td))) {
+      return(td |>
+               dplyr::transmute(term, estimate, se = std.error))
+    }
+
+    # 2) Fall back to summary() mean block
+    sm <- summary(model)
+    cf <- try(sm$coefficients$mean, silent = TRUE)
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical names: "Estimate", "Std. Error", "z value", "Pr(>|z|)"
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (!is.na(est_col) && !is.na(se_col)) {
+        df$term <- rownames(df); rownames(df) <- NULL
+        return(df |>
+                 dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+      }
+    }
+
+    # 3) Last resort: use coef() + vcov() for mean submodel
+    est_vec <- try(coef(model)[["mean"]], silent = TRUE)
+    if (inherits(est_vec, "numeric")) {
+      vc  <- try(vcov(model, model = "mean"), silent = TRUE)
+      se_vec <- if (inherits(vc, "matrix")) sqrt(diag(vc)) else NA_real_
+      df <- data.frame(term = names(est_vec), estimate = as.numeric(est_vec), se = as.numeric(se_vec))
+      return(df)
+    }
+
+    stop("Could not extract coefficients for betareg model.")
+  }
+
+  # MASS::glm.nb and similar
+  if ("negbin" %in% class(model)) {
+    sm <- summary(model)
+    cf <- sm$coefficients
+    if (inherits(cf, c("matrix","array")) && ncol(cf) >= 2) {
+      df <- as.data.frame(cf)
+      # Typical colnames: "Estimate", "Std. Error", ...
+      est_col <- names(df)[which(grepl("^estimate$", names(df), ignore.case = TRUE))[1]]
+      se_col  <- names(df)[which(grepl("^std\\.?\\s*error$", names(df), ignore.case = TRUE))[1]]
+      if (is.na(est_col) || is.na(se_col)) {
+        # Fallback to first two numeric columns
+        num_idx <- which(vapply(df, is.numeric, logical(1)))
+        if (length(num_idx) >= 2) {
+          est_col <- names(df)[num_idx[1]]
+          se_col  <- names(df)[num_idx[2]]
+        }
+      }
+      df$term <- rownames(df); rownames(df) <- NULL
+      return(df |>
+               dplyr::transmute(term, estimate = .data[[est_col]], se = .data[[se_col]]))
+    }
+    stop("Could not extract coefficients for glm.nb model.")
+  }
+
+  stop(sprintf("Unsupported model class: %s", paste(class(model), collapse = "/")))
+}
+
+one_coef_plot <- function(model, model_name, title = NULL) {
+  # --- extract --------------------------------------------------------------
+  df <- .extract_coef_table(model)
+
+  dat <- df |>
+    dplyr::filter(term != "(Intercept)") |>
+    # Belt-and-braces: drop any auxiliary/precision/nu rows
+    dplyr::filter(!stringr::str_detect(term, "(?i)log\\((nu|phi)\\)|^nu$|^phi$|precision")) |>
+    dplyr::mutate(
+      lower = estimate - 1.96 * se,
+      upper = estimate + 1.96 * se,
+      term  = term |>
+        stringr::str_replace("_z$", "") |>
+        stringr::str_replace_all("_", " ")
+    )
+
+  aic_val <- tryCatch(round(AIC(model), 1), error = function(e) NA_real_)
+
+  ggplot(dat, aes(x = reorder(term, abs(estimate)), y = estimate)) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    geom_pointrange(aes(ymin = lower, ymax = upper)) +
+    coord_flip() +
+    labs(
+      x = NULL, y = "Coefficient (±95% CI)",
+      title = if (is.null(title)) model_name else title,
+      subtitle = if (!is.na(aic_val)) paste0("AIC: ", aic_val) else NULL
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold"),
+          plot.margin = margin(10, 20, 10, 10))
+}
+
+# --- your models -----------------------------------------------------------
+models <- list(
+  "SR ~ sand (NB)"    = m_rich_sand,
+  "SR ~ clay (NB)"    = m_rich_clay,
+  "SDI ~ sand (beta)" = m_SDI_sand_phi,
+  "SDI ~ clay (beta)" = m_SDI_clay_phi
+)
+
+# --- print plots -----------------------------------------------------------
+for (nm in names(models)) {
+  print(one_coef_plot(models[[nm]], nm))
+}
+
+```
+
+
