@@ -7,7 +7,7 @@ editor_options:
   chunk_output_type: inline
 ---
 
-In this tutorial we will bring together different data products to investigate the relationship between plant species richness and meteorological and soil parameters in Australian rangelands. The original data products were collected or generated independently. They have different spatial and temporal covers and resolutions, and are saved in different file formats. In this tutorial we will demonstrate how to process the original data to create an harmonised dataset. This will be used in statistical models to investigate the main drivers of vegetation species richness in Australian rangelands.  
+In this tutorial we will bring together different data products to investigate the relationship between plant species richness and meteorological and soil parameters in Australian rangelands. The original data products were collected or generated independently. They have different spatial and temporal covers and resolutions, and are saved in different file formats. In this tutorial we will demonstrate how to process the original data to create a harmonised dataset. This will be used in statistical models to investigate the main drivers of vegetation species richness in Australian rangelands.  
 
 
 # SET UP
@@ -37,7 +37,9 @@ For this tutorial we will use option 1. You will need to download about 50 files
 
 
 ## Vegetation data
-Usually you would download vegetation survey data through the Ecoplots dashboard https://ecoplots.tern.org.au/ However, for this tutorial we have pre-selected the data and saved them to a csv file that can be accessed through the following link. This ensures that the file contains only the data that we need for the tutorial keeping the file size small and the results reproducible. 
+Usually you would download vegetation survey data through the EcoPlots dashboard https://ecoplots.tern.org.au/ However, for this tutorial we have pre-selected the data and saved them to a csv file that can be accessed through the following link. This ensures that the file contains only the data that we need for the tutorial keeping the file size small and the results reproducible. 
+
+Note: We have a separate video demonstrating how to navigate to this data & download it using EcoPlots on the workshop web page 
 
 THIS IS THE LINK TO THE VEGETATION DATA CSV FILE
 
@@ -47,7 +49,7 @@ Meteorological data are in netCDF files and can be downloaded through the follow
 
 ### Precipitation
 
-https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_01.nc
+https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_01.nc 
 
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_rainfall_monthly-mean_0-01deg_1976-2005_00000000_02.nc
 
@@ -107,6 +109,7 @@ https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_tem
 
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_04.nc
 
+##I note here that there are two for 04 so guessing April? - I changed to 05 to see if it worked - and it seemed to so hopefully all good :)
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_05.nc
 
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_06.nc
@@ -125,7 +128,8 @@ https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_tem
 
 
 ## Soil maps
-Soil maps are .tif files and can be downloaded through the following links. Please note that these are large files and may require a few minutes to download.
+Soil maps are .tif files and can be downloaded through the following links. Please note that these are large files and may require  10 to 20 minutes to download.
+#Note you may need to create a TERN account if not done so already in order to download these: Instructions here: https://youtu.be/HTlc0xk4zf8 
 
 ### Available Water Capacity 
 https://data.tern.org.au/model-derived/slga/NationalMaps/SoilAndLandscapeGrid/AWC/v2/AWC_000_005_EV_N_P_AU_TRN_N_20210614.tif   
@@ -160,6 +164,7 @@ We will need to define the boundaries for Australian rangelands. To do this we w
 - Click on this link https://fed.dcceew.gov.au/datasets/erin::australian-rangeland-boundaries/about
 - Click on download 
 - Select Shapefile
+- Extract the shapefile once you have it locally
 
 
 # VEGETATION
@@ -179,7 +184,7 @@ Commonwealth of Australia (Department of Climate Change, Energy, the Environment
 ## Import the data
 This chunk imports the csv file with the data or vegetation plot surveys. 
 The first line of code in this chunk allows you to interactively select the folder where the data are saved. Hopefully you have saved all the data in this folder and will not need to select the folder again. 
-# note put this before the command/chunk to knitR or there is a warning / error message.
+
 ```{r}
 # Select data folder
 data_folder <- rstudioapi::selectDirectory()
@@ -197,8 +202,11 @@ vegetation <- read.csv(file_path, header = TRUE, fill = TRUE)
 
 
 ## Create a table of plot level data
-We now need to create a table that will contain one row for each plot. All data summarised at the plot level (e.g. species richness, metereological parameters, soil parameters) will be saved here. 
+We now need to create a table that will contain one row for each plot. All data summarised at the plot level (e.g. species richness, meteorological parameters, soil parameters) will be saved here. 
 ```{r}
+#load library
+library(dplyr)
+
 # Create a table of plot-level data with selected columns
 plot_level_data <- vegetation %>%
   dplyr::select(datasetTitle, siteName, latitude_Degree, longitude_Degree,
@@ -213,8 +221,9 @@ plot_level_data <- vegetation %>%
 
 ## Filter out sites outside of the rangelands boundaries
 The dataset contains both rangeland and non-rangeland plots. Rangelands boundaries are defined by the Dept of Climate Change, Energy, the Environment & Water (DCCEEW) and available as a shapefile. This chunk reads the shapefile and uses it to filter the plots based on their geographic coordinates (lat and lon). Plots outside of the rangeland boundaries are removed from dataset. 
+#Note: ensure you have extracted the rangeland boundary file prior to running this chunk
 ```{r}
-library(dplyr)
+#library(dplyr) - remove if loaded in previous chunk
 library(ggplot2)
 library(maps)
 library(sf)
@@ -377,7 +386,7 @@ Min temperature > Hutchinson, M., Kesteven, J. & Xu, T.. Monthly 1976-2005 mean 
 
 Max temperature > Hutchinson, M., Kesteven, J. & Xu, T.. Monthly 1976-2005 mean daily maximum temperature: ANUClimate 1.0, 0.01 degree, Australian Coverage. Version 1. NCI Australia. Dataset. https://portal.tern.org.au/metadata/4f724e1e-c799-43cf-882b-c32c7a98419d NCI Project: rr9 
 
-The datasets contain monthly-mean daily-minimum and -maximum temperature for the Australian continent between 1976-2005. Data were modelled by fitting trivariate thin plate smoothing spline functions of longitude, latitude and vertically exaggerated elevation to observed and estimated monthly 1976-2005 daily minimum and maximun temperature means at 1541 Bureau of Meteorology stations.
+The datasets contain monthly-mean daily-minimum and -maximum temperature for the Australian continent between 1976-2005. Data were modelled by fitting trivariate thin plate smoothing spline functions of longitude, latitude and vertically exaggerated elevation to observed and estimated monthly 1976-2005 daily minimum and maximum temperature means at 1541 Bureau of Meteorology stations.
 
 Related metadata are available here:
 Min temperature > https://portal.tern.org.au/metadata/NCI/aabf33e8-8f3c-4f59-96c1-d1556348aed6
@@ -624,7 +633,7 @@ Malone, B. & Searle, R. (2022). Soil and Landscape Grid National Soil Attribute 
 Wadoux, A., Dobarco, M., Malone, B., Minasny, B., McBratney, A. & Searle, R. (2024). Soil and Landscape Grid National Soil Attribute Maps - Organic Carbon (3" resolution) - Release 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/ejhm-c070
 
 
-These data are part of The Soil and Landscape Grid of Australia. Data were generated by applying standard Digital Soil Modelling (DSM) methods utilizing publicly available soil observation data and publicly available environmental covariate. A full description of the methodology can be found here https://aussoilsdsm.esoil.io/slga-version-2-products/soil-hydraulic-properties
+These data are part of The Soil and Landscape Grid of Australia. Data were generated by applying standard Digital Soil Modelling (DSM) methods utilising publicly available soil observation data and publicly available environmental covariate. A full description of the methodology can be found here https://aussoilsdsm.esoil.io/slga-version-2-products/soil-hydraulic-properties
 
 
 Related metadata are available here:
@@ -660,6 +669,7 @@ PTO = Total Phosphorus
 Soil parameters are saved as .tif files. 
 
 ## Import soil data and extract values for the rangeland plots
+##NOTE I significantly edited this as did not work for me ######################## 
 ```{r}
 library(terra)
 library(dplyr)
@@ -673,6 +683,7 @@ parameters <- unique(substr(basename(tif_files), 1, 3))
 # Create a SpatVector of plot locations
 plot_points <- vect(plot_level_data, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
 
+# Loop through each parameter
 # Loop through each parameter
 for (param in parameters) {
   
@@ -691,6 +702,30 @@ for (param in parameters) {
 
 library(dplyr)
 
+
+# Loop through each parameter
+for (param in parameters) {
+  
+  # Select all files for this parameter
+  param_files <- tif_files[substr(basename(tif_files), 1, 3) == param]
+  
+  # Load rasters
+  rasters <- rast(param_files)
+  
+  # Extract values at plot locations
+  extracted_values <- terra::extract(rasters, plot_points, ID = FALSE)
+  
+  # Convert to numeric vector (taking mean if multiple layers)
+  if (ncol(extracted_values) > 1) {
+    plot_level_data[[param]] <- as.numeric(rowMeans(extracted_values, na.rm = TRUE))
+  } else {
+    plot_level_data[[param]] <- as.numeric(extracted_values[, 1])
+  }
+}
+
+# Remove temporary data
+rm(rasters, plot_points) 
+
 # Rename columns
 plot_level_data <- plot_level_data %>%
   rename(
@@ -703,9 +738,6 @@ plot_level_data <- plot_level_data %>%
     sand_percentage = SND,
     organicCarbon_percentage = SOC
   )
-
-# Remove temporary data
-rm(rasters, plot_points) 
 
 # Show the location of the plots, color coded by available water capacity 
 ggplot() +
@@ -990,7 +1022,6 @@ organicCarbon_percentage
 pred_vars <- c(
 "maximumTemperature_degreeCelsius",
 "minimumTemperature_degreeCelsius",
-"temperatureAnnualMean_degreeCelsius",
 "precipitationAnnualMean_millimetre",
 "availableWaterCapacity_percentage",
 "clay_percentage",
@@ -1033,7 +1064,6 @@ intersect(created_z, names(plot_level_data))
 pred_vars <- c(
 "maximumTemperature_degreeCelsius",
 "minimumTemperature_degreeCelsius",
-"temperatureAnnualMean_degreeCelsius",
 "precipitationAnnualMean_millimetre",
 "availableWaterCapacity_percentage",
 "clay_percentage",
@@ -1090,7 +1120,6 @@ message("Not enough centred predictors found to compute a correlation matrix (ne
 pred_vars <- c(
 "maximumTemperature_degreeCelsius",
 "minimumTemperature_degreeCelsius",
-"temperatureAnnualMean_degreeCelsius",
 "precipitationAnnualMean_millimetre",
 "availableWaterCapacity_percentage",
 "clay_percentage",
@@ -1124,8 +1153,7 @@ print(round(cm, 2))
 library(corrplot)
 
 pred_vars <- c(
-"maximumTemperature_degreeCelsius","minimumTemperature_degreeCelsius",
-"temperatureAnnualMean_degreeCelsius","precipitationAnnualMean_millimetre",
+"maximumTemperature_degreeCelsius","minimumTemperature_degreeCelsius","precipitationAnnualMean_millimetre",
 "availableWaterCapacity_percentage","clay_percentage","nitrogen_percentage","pH",
 "phosphorus_percentage","silt_percentage","sand_percentage","organicCarbon_percentage"
 )
@@ -1157,8 +1185,6 @@ mar = c(0,0,1,0)
 #Which predictors to remove? Here is where our knowledge of plant ecosystems comes into play
 As clay and silt are highly positively correlated (0.93), while sand and silt are highly negatively correlated (-0.99)
 Let's remove silt and run separate models with sand and clay separately as they may have interesting effects on plant richness.
-
-Temperature values are also (logically) correlated. As temp annual mean is correlated with both temp maxiumum and temp minimum - let's remove the average temp.
 
 Nitrogen is also highlighted as correlated with organic Carbon (again logically) as plant available nitrogen is a key plant limiting soil nutrient - let's cut organic Carbon.
 
@@ -1242,15 +1268,7 @@ distribution families to handle our response variables.
     - NEGATIVE BINOMIAL allows variance > mean → better fit for species counts
     - We use: glm.nb() with family = Negative Binomial
 
-# 2. SIMPSON DIVERSITY INDEX (SDI) (continuous proportion: 0 to 1)
-    - Natural family: Beta distribution (via betareg or mgcv::betar())
-    - Beta distribution models continuous (0,1) responses with flexible shapes
-    - NOT appropriate: Binomial (for binary 0/1 or count/total outcomes)
-    - NOT appropriate: Gaussian (assumes unbounded continuous data)
-    - We use: Beta regression for SDI models
-
-# Summary: Use Negative Binomial GLM for species richness counts,
-#          and Beta GLM for Simpson Diversity Index proportions.
+# Summary: Use Negative Binomial GLM for species richness counts
 
 #First let's check for incomplete rows - as the models will not converge if there are missing data
 
@@ -1259,9 +1277,6 @@ distribution families to handle our response variables.
 # Check how many complete cases we have
 cat("Rows in plot_level_data:", nrow(plot_level_data), "\n")
 
-# Check if SDI has NAs
-cat("NAs in SDI:", sum(is.na(plot_level_data$SDI)), "\n")
-
 # ============================================================================
 # CHECK FOR INCOMPLETE CASES IN plot_level_data (NO REMOVAL)
 # ============================================================================
@@ -1269,7 +1284,6 @@ cat("NAs in SDI:", sum(is.na(plot_level_data$SDI)), "\n")
 # Check which columns we need for models
 model_cols <- c(
   "species_richness",
-  "SDI",
   "minimumTemperature_degreeCelsius_z",
   "maximumTemperature_degreeCelsius_z",
   "precipitationAnnualMean_millimetre_z",
@@ -1297,7 +1311,7 @@ cat("Incomplete cases:", sum(!complete_rows), "\n")
   
 ```
 
-#we do have 14 incomplete rows - let's create a data subset to use in our models mod_df
+#we do have 11 incomplete rows - let's create a data subset to use in our models mod_df
 
 ```{r}
 #create mod_df
@@ -1540,7 +1554,7 @@ cat("Choosing SAND model (marginally lower AIC, clearer P effect).\n")
 cat("Clay shows inverse pattern as expected (r = -0.XX between sand/clay).\n")
 
 ```
-#summary## - Elisa should we delete - I feel in the interests of time probably delete? 
+#summary# 
 
 ```{r}
 # ============================================================================
@@ -1577,289 +1591,10 @@ cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richnes
 
 
 ```
-#now the SDI (simpson's diversity index) models
-
-
-```{r}
-
-#1) SDI and clay
-
-# ============================================================================
-# SDI ~ CLAY MODEL
-# ============================================================================
-
-library(betareg)
-library(statmod)
-
-m_SDI_clay <- betareg(
-  SDI ~
-    minimumTemperature_degreeCelsius_z +
-    maximumTemperature_degreeCelsius_z +
-    precipitationAnnualMean_millimetre_z +
-    availableWaterCapacity_percentage_z +
-    clay_percentage_z +
-    nitrogen_percentage_z +
-    pH_z +
-    phosphorus_percentage_z,
-  data = plot_level_data
-)
-
-cat("=== SDI ~ CLAY MODEL ===\n")
-summary(m_SDI_clay)
-
-
-```
-#check model fit
-
-```{r}
-# Diagnostics
-
-# SDI ~ CLAY
-par(mfrow = c(1, 2))
-plot(m_SDI_clay, which = 1)   # residuals vs fitted  (OK)
-plot(m_SDI_clay, which = 4)   # leverage/Cook's      (OK)
-
-# Manual QQ + Pearson residuals (kept)
-par(mfrow = c(1, 2))
-res_clay <- residuals(m_SDI_clay, type = "pearson")
-fit_clay <- fitted(m_SDI_clay)
-plot(fit_clay, res_clay, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
-qqnorm(res_clay, main = "QQ: Pearson residuals (CLAY)"); qqline(res_clay, col="red")
-
-
-
-
-```
-#model fit interpretation
-🧩 1. Why the QQ plot might look odd
-
-A slightly curved or scattered QQ line in betareg residuals is normal because:
-
-Residuals are not expected to be normal — the model uses a beta (bounded 0–1) likelihood, not a Gaussian one.
-
-The residuals depend on the mean–variance relationship, which can change with predictors.
-So, unlike a linear model, you don’t expect a perfect straight QQ line.
-
-In short: a “wonky” QQ plot isn’t automatically a problem here.
-
-#however! the residuals vs linear does have a funnel shape so we are going to test this with a “precision” (phi) sub-model
-
-# In beta regression, φ (phi) controls the precision or spread of values around the mean (μ).
-# By default, φ is constant (equal variability for all observations).
-# A "phi model" lets φ vary with predictors when residuals show changing spread (heteroskedasticity).
-# This improves fit and reveals where SDI is more or less consistent across environments.
-# μ model → predicts mean SDI; φ model → predicts variability of SDI.
-
-
-```{r}
-m_SDI_clay_phi <- betareg(
-  SDI ~
-    minimumTemperature_degreeCelsius_z +
-    maximumTemperature_degreeCelsius_z +
-    precipitationAnnualMean_millimetre_z +
-    availableWaterCapacity_percentage_z +
-    clay_percentage_z +
-    nitrogen_percentage_z +
-    pH_z +
-    phosphorus_percentage_z |
-    clay_percentage_z + maximumTemperature_degreeCelsius_z,   # precision model
-  data = plot_level_data
-)
-
-summary(m_SDI_clay_phi)
-
-AIC(m_SDI_clay, m_SDI_clay_phi)
-
-```
-#interesting!
-Because residual variance increased with the fitted values, we allowed the precision parameter (φ) to vary with environmental predictors.
-The variable-precision model provided a substantially better fit (ΔAIC = 28), indicating that SDI variability changes systematically across environmental gradients.
-
-##let's recheck model fit
-
-```{r}
-# --- Re-check fit for phi model ------------------------------------------
-# Diagnostics: same 4 plots as before (but for the phi model)
-par(mfrow = c(2, 2))
-plot(m_SDI_clay_phi, which = 1:4)
-
-# Extra quick looks
-par(mfrow = c(1, 2))
-# Pearson residuals vs fitted (should look like random noise; funnel should be reduced)
-res_phi <- residuals(m_SDI_clay_phi, type = "pearson")
-fit_phi <- fitted(m_SDI_clay_phi)
-plot(fit_phi, res_phi, xlab = "Fitted (mu)", ylab = "Pearson residuals",
-     main = "Residuals vs Fitted (phi model)")
-abline(h = 0, lty = 2)
-
-# QQ plot of Pearson residuals (wonky is OK in beta; looking for major deviations)
-qqnorm(res_phi, main = "QQ: Pearson residuals (phi model)")
-qqline(res_phi, col = "red")
-
-# Compare to constant-phi model via LR test and AIC (confirms improvement)
-library(lmtest)
-print(lrtest(m_SDI_clay, m_SDI_clay_phi))
-AIC(m_SDI_clay, m_SDI_clay_phi)
-
-```
-
-#let's check the model summary table for this better phi model
-
-```{r}
-# --- Inspect model summary tables ----------------------------------------
-s <- summary(m_SDI_clay_phi)
-s  # full console summary (includes pseudo R^2, logLik, etc.)
-cat("Pseudo R^2 (McFadden):", round(s$pseudo.r.squared, 3), "\n")
-```
-
-#SDI ~ clay predictors model interpretation:
-
-The variable-precision beta regression indicated that diversity–evenness (SDI) is most strongly influenced by temperature extremes.
-Minimum temperature had a positive effect, while maximum temperature had a strong negative effect on SDI, suggesting that diversity is highest under moderate temperature conditions — warm enough to avoid cold stress but not so hot that heat stress reduces evenness.
-Available water capacity showed a modest positive effect, while clay had a weak negative trend.
-
-The precision (φ) submodel revealed that SDI variability increases under hotter maximum temperatures, indicating that diversity patterns become less consistent as temperature stress intensifies.
-
-Together, these results show that temperature drives both the mean and variability of community evenness, while soil properties play secondary roles.
-
-
-#let's move onto the model for SDI ~ sand + predictors
-
-```{r}
-# ============================================================================
-# SDI ~ SAND MODEL
-# ============================================================================
-
-m_SDI_sand <- betareg(
-  SDI ~
-    minimumTemperature_degreeCelsius_z +
-    maximumTemperature_degreeCelsius_z +
-    precipitationAnnualMean_millimetre_z +
-    availableWaterCapacity_percentage_z +
-    sand_percentage_z +
-    nitrogen_percentage_z +
-    pH_z +
-    phosphorus_percentage_z,
-  data = plot_level_data
-)
-
-cat("\n=== SDI ~ SAND MODEL ===\n")
-summary(m_SDI_sand)
-
-
-```
-
-#let's check model fit
-```{r}
-# SDI ~ SAND
-par(mfrow = c(1, 2))
-plot(m_SDI_sand, which = 1)   # residuals vs fitted
-plot(m_SDI_sand, which = 4)   # leverage/Cook's
-
-# Manual QQ + Pearson residuals (kept)
-par(mfrow = c(1, 2))
-res_sand <- residuals(m_SDI_sand, type = "pearson")
-fit_sand <- fitted(m_SDI_sand)
-plot(fit_sand, res_sand, xlab = "Fitted (mu)", ylab = "Pearson residuals"); abline(h=0,lty=2)
-qqnorm(res_sand, main = "QQ: Pearson residuals (SAND)"); qqline(res_sand, col="red")
-
-
-```
-
-#again we have a bit of funnel shape - let's fit the phi model and compare
-
-```{r}
-# === Fit variable-precision (phi) model for SAND ===
-m_SDI_sand_phi <- betareg(
-  SDI ~
-    minimumTemperature_degreeCelsius_z +
-    maximumTemperature_degreeCelsius_z +
-    precipitationAnnualMean_millimetre_z +
-    availableWaterCapacity_percentage_z +
-    sand_percentage_z +
-    nitrogen_percentage_z +
-    pH_z +
-    phosphorus_percentage_z |
-    sand_percentage_z + maximumTemperature_degreeCelsius_z,   # phi submodel
-  data = plot_level_data
-)
-
-# Compare with LR test and AIC (as done for clay)
-library(lmtest)
-print(lrtest(m_SDI_sand, m_SDI_sand_phi))
-AIC(m_SDI_sand, m_SDI_sand_phi)
-
-
-```
-#which one to keep?
-ΔAIC ≈ 29 (–827.4 vs –798.0) → the variable-precision - phi model fits much better.
-
-Likelihood ratio test: χ² = 33.37, df = 2, p < 0.001 → highly significant improvement.
-
-This tells us the precision (φ) varies systematically with sand and maximum temperature—just like it did with clay.
-In other words, SDI variability isn’t constant: it changes across sandier and hotter environments.
-
-
-#check model fit
-
-```{r}
-# === MODEL FIT CHECK: SDI ~ SAND (phi model) ==============================
-
-# Supported base plots for betareg (which = 1 and 4 only)
-par(mfrow = c(1, 2))
-plot(m_SDI_sand_phi, which = 1)  # Residuals vs fitted
-plot(m_SDI_sand_phi, which = 4)  # Leverage/Cook's distance
-
-# Additional custom diagnostic plots (same as clay)
-par(mfrow = c(1, 2))
-res_sand_phi <- residuals(m_SDI_sand_phi, type = "pearson")
-fit_sand_phi <- fitted(m_SDI_sand_phi)
-
-# Residuals vs fitted (to check funnel pattern)
-plot(fit_sand_phi, res_sand_phi,
-     xlab = "Fitted (mu)",
-     ylab = "Pearson residuals",
-     main = "Residuals vs Fitted (SAND, phi model)")
-abline(h = 0, lty = 2, col = "grey40")
-
-# QQ plot (shape can be slightly curved in beta models)
-qqnorm(res_sand_phi, main = "QQ: Pearson residuals (SAND, phi model)")
-qqline(res_sand_phi, col = "red", lty = 2)
-
-```
-#it's a better fit - let's check the phi SDI ~ sand model
-```{r}
-# === MODEL SUMMARY: SDI ~ SAND (phi model) ===============================
-
-# View full model summary
-summary(m_SDI_sand_phi)
-```
-
-#sand phi model interpretation:
-Temperature sets the tone. SDI (evenness/diversity) is highest where minimum temps are warmer and maximum temps are cooler (μ: min T +, max T −; both significant). That’s a “moderate temperatures = more even communities” story.
-
-Soil water matters. Available water capacity has a negative coefficient (μ), indicating lower AWC → higher evenness (significant). In these rangelands, places with less plant-available water tend to have communities that are more even.
-
-Texture signal from sand. Sand % is positive and significant in the φ model: μ: sand + (significant) → sandier sites show slightly higher evenness after controlling for climate and chemistry.
-
-Rainfall is secondary. Precipitation is only marginal (μ, p≈0.07), consistent with temperature extremes being the stronger filter here.
-
-Variance tells an extra story (φ model). Max temperature strongly reduces φ (φ: max T −, p<0.001), meaning hotter sites have more variable SDI (less predictable evenness). Sand’s effect on φ is small/non-sig, so most variance changes are tied to heat rather than texture.
-
-One-liner: In these sandier rangelands, community evenness is highest under warm nights, cooler days, and lower AWC, with a modest boost from sandiness; heat stress not only lowers evenness on average, it also makes it more variable across sites.
-
-
 #The Overall Ecological Story:
-#Elisa - let's check that this actually makes sense - can you read and see if the interpretation makes sense?#
 
 #Species Richness:
 Species richness is highest on coarse-textured, acidic, low-phosphorus soils—conditions typical of freely draining sandy substrates. These soils reduce competitive exclusion and favour the coexistence of many stress-tolerant species. Temperature also influences richness, but soil texture and chemistry act as the primary environmental filters.
-
-#Diversity (SDI):
-Once species are established, temperature extremes control community evenness: warmer minimum temperatures enhance evenness, while hotter maximum temperatures reduce it. Lower water-holding capacity (AWC) is associated with higher evenness, consistent with environments where limited resources prevent dominance by a few species.
-
-#Variance (φ model):
-Hotter conditions increase the variability of SDI across sites, suggesting that heat stress not only lowers evenness on average but also makes community structure less predictable.
 
 
 #let's create a summary plot of all 4 models
@@ -1973,9 +1708,7 @@ one_coef_plot <- function(model, model_name, title = NULL) {
 # --- your models -----------------------------------------------------------
 models <- list(
   "SR ~ sand (NB)"    = m_rich_sand,
-  "SR ~ clay (NB)"    = m_rich_clay,
-  "SDI ~ sand (beta)" = m_SDI_sand_phi,
-  "SDI ~ clay (beta)" = m_SDI_clay_phi
+  "SR ~ clay (NB)"    = m_rich_clay
 )
 
 # --- print plots -----------------------------------------------------------
@@ -1984,5 +1717,6 @@ for (nm in names(models)) {
 }
 
 ```
+
 
 
