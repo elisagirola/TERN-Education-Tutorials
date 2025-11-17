@@ -41,7 +41,7 @@ Usually you would download vegetation survey data through the EcoPlots dashboard
 
 Note: We have a separate video demonstrating how to navigate to this data & download it using EcoPlots on the workshop web page 
 
-THIS IS THE LINK TO THE VEGETATION DATA CSV FILE
+https://tern.short.gy/file-plant-occurrence
 
 
 ## Meteorological data
@@ -373,6 +373,26 @@ plot_level_data <- plot_level_data %>%
 
 # Remove temporary tables
 rm(richness_table) 
+
+# Show the location of the plots, color coded by species richness
+ggplot() +
+  # Base map of Australia
+  geom_polygon(data = australia_map,
+               aes(x = long, y = lat, group = group),
+               fill = "gray90", color = "gray50") +
+  # Plot points, colored by variable values
+  geom_point(data = plot_level_data,
+             aes(x = longitude_Degree, y = latitude_Degree, color = species_richness),
+             size = 2) +
+  # Blue–Red continuous color scale
+  scale_color_gradient(low = "white", high = "darkgreen",
+                       name = "Species richness") +
+  # Map extent and theme
+  coord_quickmap(xlim = c(110, 155), ylim = c(-45, -10)) +
+  theme_minimal() +
+  labs(title = "Species richness at plot locations",
+       x = "Longitude", y = "Latitude")
+
 ```
 These steps reduced the dataset by about 13,000 rows.
 Please note that our dataset did not contain NAs - we had already excluded them during the data selection. This step was included to show the complete workflow. 
@@ -1490,7 +1510,7 @@ m_rich_sand <- glm.nb(
     availableWaterCapacity_percentage_z +
     sand_percentage_z +  
     nitrogen_percentage_z +
-    pH_z +
+    pH_z + 
     phosphorus_percentage_z,
   data = mod_df
 )
@@ -1499,7 +1519,7 @@ m_rich_sand <- glm.nb(
 summary(m_rich_sand)
 
 
-
+# 
 ```
 #let's check model fit
 
