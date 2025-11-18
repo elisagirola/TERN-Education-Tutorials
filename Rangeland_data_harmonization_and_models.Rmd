@@ -109,7 +109,6 @@ https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_tem
 
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_04.nc
 
-##I note here that there are two for 04 so guessing April? - I changed to 05 to see if it worked - and it seemed to so hopefully all good :)
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_05.nc
 
 https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005/00000000/ANUClimate_v1-0_temperature-max_monthly-mean_0-01deg_1976-2005_00000000_06.nc
@@ -128,7 +127,7 @@ https://thredds.nci.org.au/thredds/fileServer/rr9/ANUClimate/ANUClimate_v1-0_tem
 
 
 ## Soil maps
-Soil maps are .tif files and can be downloaded through the following links. Please note that these are large files and may require  10 to 20 minutes to download.
+Soil maps are .tif files and can be downloaded through the following links. Please note that these are large files and may require 10 to 20 minutes to download per file.
 #Note you may need to create a TERN account if not done so already in order to download these: Instructions here: https://youtu.be/HTlc0xk4zf8 
 
 ### Available Water Capacity 
@@ -689,7 +688,7 @@ PTO = Total Phosphorus
 Soil parameters are saved as .tif files. 
 
 ## Import soil data and extract values for the rangeland plots
-##NOTE I significantly edited this as did not work for me ######################## 
+
 ```{r}
 library(terra)
 library(dplyr)
@@ -979,7 +978,49 @@ The plots suggest that:
 
 
 
-#Now to build the models
+#Now to build the GLM models
+
+But why can't we just use the simple linear regressions mentioned above?
+
+It is possible - and best practice to start with the simplest models - but ecological data rarely meets the assumptions required for a linear regression to be accurate, such as:
+- normality
+- homogeneity 
+- independence 
+- correct model specification
+
+Species richness is a count — it’s the number of species at a site. Counts don’t behave the way linear regression needs them to. They’re usually skewed, they often have lots of low values, and the spread of the data tends to increase as the counts get higher. 
+
+Because these assumptions are broken, linear regression can give misleading results if we use it as the main model.
+
+So we use Generalised Linear Models instead — like Poisson or Negative Binomial models — because they’re designed for count data and handle the messy, uneven variation you get in ecology. They give us more reliable estimates and better reflect the underlying biology
+
+#Ok - but how do we know linear regression is not good enough? Good question - let's check!
+
+
+Residuals vs Fitted = funnel shape - spread of the residuals gets wider as fitted values get larger (plain english: The model makes small errors for low richness values and much larger errors for higher richness values. Variance increases with the mean (classic for ecological count data). Linear regression assumption is violated)
+
+QQnorm: is concave and does not follow the line - meaing residuals are skewed / not normal. another assumption violation
+
+Scale-location plot - similar to residuals vs fitted - The model becomes less reliable at higher values.
+
+Residuals vs leverage - clustered to far left - Most of our data points have very low leverage. That simply means none of them are extreme or unusual, and none have an unusually large influence on the fitted line.
+
+#Why are GLMs / GLMMs so cool!?
+
+A GLM is powerful because it lets us look at all our predictors together in one model, instead of running separate relationships one at a time.
+This means we can see the unique effect of each soil variable while controlling for the others.
+
+In other words, GLMs let us answer questions like:
+‘What is the effect of nitrogen once we’ve accounted for clay, pH, moisture, and temperature?’
+
+This is something simple linear regressions cannot do — they only show one predictor at a time and can’t separate overlapping effects. GLMs allow us to compare predictors directly, see which ones matter most, and build a more realistic picture of what’s driving species richness.
+
+```{r}
+plot(lm(species_richness ~ clay_percentage, data = plot_level_data))
+
+#graphical validation of linear model
+```
+
 
 First we install library packages for the build
 ```{r}
@@ -991,7 +1032,7 @@ library(performance)
 ```
 
 
-#Hold on! There is a very important step we need to do first. Because our preditor variables are on different scales e.g., percentages for soil covariates, soil pH, degrees celsius (max, min and annual mean), precipitation (mm). This means we need to scale or 'centre' these variables so that they can be compared easily between models.
+#Hold on! There is a very important step we need to do first. Because our predictor variables are on different scales e.g., percentages for soil covariates, soil pH, degrees celsius (max, min), precipitation (mm). This means we need to scale or 'centre' these variables so that they can be compared easily between models.
 IMPORTANT : we are NOT centering site/visit IDs or dates.
 If we do a GLMM random effects this is handled by partitioning by site / date.
 
@@ -1012,7 +1053,7 @@ We want to know how correlated our different predictive variables are before mod
 
 It's a good idea to check correlations between predictors so we can drop/merge highly redundant ones and reduce the risk of multicollinearity. Multicollinearity = predictors telling the same story so strongly that coefficients become wobbly, standard errors inflate, and the model can look unstable.
 
-Why we just created “_z” versions (z-centred predictors): for each predictor X, we subtract its mean and divide by its standard deviation: X_z = (X − mean(X)) / sd(X). This doesn’t change the relationships in the data; it simply puts everything on a common, unitless scale. Benefits: coefficients become comparable (“effect per 1 SD change”) across % vs mm vs °C, models tend to converge more easily (especially GLMs/GLMMs), and any interactions we add later are easier to interpret. 
+We will first create 'centred' or “_z” versions (z-centred predictors): for each predictor X, we subtract its mean and divide by its standard deviation: X_z = (X − mean(X)) / sd(X). This doesn’t change the relationships in the data; it simply puts everything on a common, unitless scale. Benefits: coefficients become comparable (“effect per 1 SD change”) across % vs mm vs °C, models tend to converge more easily (especially GLMs/GLMMs), and any interactions we add later are easier to interpret. 
 
 We did not centre IDs like site/visit or dates as we only have one visit per site. If we had multiple site visits we could use site as a random effect within a GLMM 
 
@@ -1115,24 +1156,11 @@ print(round(cor_mat, 2))
 message("Not enough centred predictors found to compute a correlation matrix (need at least 2).")
 }
 
-# Optional: a quick pairs plot (uncomment if you want a visual)
-
-# pairs(plot_level_data[, preds_z, drop = FALSE], pch = 16)
-
-# Optional: VIF diagnostic using 'car' (uncomment the two lines below if you want VIFs)
-
-# install.packages("car")  # run once
-
-# car::vif(lm(species_richness ~ ., data = cbind(species_richness = plot_level_data$species_richness,
-
-# plot_level_data[, preds_z, drop = FALSE])))
-
-
 
 ```
 
 
-#fantastic - we can see there is some colliearity between predictors we expected e.g., temperatures / soil sand / silt clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. E.g., if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
+#fantastic - we can see there is some collinearity between predictors we expected e.g., temperatures / soil sand / clay. As a rule of thumb many use a cut-off of ~0.75 for eliminating predictors - but this needs to be based on expert knowledge as well. E.g., if we were really interested in a plant that had low nutrient soil requirements we may want to run a model examining the differences between these predictors in relation to model fit.
 
 #let's visualise the correlations between predictors so it's easier to visually determine which to remove
 
@@ -1203,8 +1231,8 @@ mar = c(0,0,1,0)
 ```
 
 #Which predictors to remove? Here is where our knowledge of plant ecosystems comes into play
-As clay and silt are highly positively correlated (0.93), while sand and silt are highly negatively correlated (-0.99)
-Let's remove silt and run separate models with sand and clay separately as they may have interesting effects on plant richness.
+As clay and silt are highly positively correlated (0.94), while sand and silt are highly negatively correlated (-0.99)
+Let's remove silt and run separate models with sand and clay as they may have interesting effects on plant richness.
 
 Nitrogen is also highlighted as correlated with organic Carbon (again logically) as plant available nitrogen is a key plant limiting soil nutrient - let's cut organic Carbon.
 
@@ -1268,7 +1296,7 @@ print(out, row.names = FALSE)
  
 # Fantastic - We are ready to create our models
 
-#We only have 1 visit per site across 785 sites so we do not need to use a GLMM and partition the site visits using random effect e.g., (1 | siteName)
+#We only have 1 visit per site across 621 sites so we do not need to use a GLMM and partition the site visits using random effect e.g., (1 | siteName)
 
 Therefore, we use a standard GLM (Generalized Linear Model) with appropriate
 distribution families to handle our response variables.
@@ -1276,10 +1304,8 @@ distribution families to handle our response variables.
 # Note: If we had multiple visits per site, a GLMM would be appropriate to 
  account for site-level correlation and unmeasured heterogeneity (e.g., soil 
  history, management, microclimate).
-
-# --- Distribution Family Choices ---
-
-# Our two response variables have different distributions:
+ 
+ # --- Distribution Family Choices ---
 
 # 1. SPECIES RICHNESS (count data: 0, 1, 2, 3, ...)
     - Natural families: Poisson or Negative Binomial
@@ -1422,61 +1448,128 @@ testZeroInflation(sim_clay)
 
 ```
 #model fit is fairly good
+
+residuals vs fitted / scale location and QQ residuals all look as we would expect.
+
+And residuals vs leverage is showing the majority of the data vs outliers seems fine.
+
 #wow some interesting results for the clay model - what is your interpretation? We'd love to hear it.
 
-##ECOLOGICAL STORY TO BE DELETED FROM WORKSHOP VERSION##
-
 #Key Ecological Story:
-Your rangeland plant diversity is primarily driven by temperature extremes (the min/max temp effects are opposite and strongest) and soil chemistry (pH, clay). 
+Rangeland plant richness is primarily driven by temperature extremes (the min/max temp effects are opposite and strongest) and soil chemistry (pH, clay). 
 
-The results suggest that diversity is highest under moderate conditions — where minimum temperatures are warm enough to avoid cold stress, maximum temperatures are cool enough to avoid heat stress, and soils are moderately acidic with lower clay content.
+The results suggest that richness is highest under moderate conditions — where minimum temperatures are warm enough to avoid cold stress, maximum temperatures are cool enough to avoid heat stress, and soils are moderately acidic with lower clay content.
 
-The fact that precipitation wasn’t significant is interesting. It suggests that, in your dataset, temperature stress may be a stronger filter on diversity than water availability. This could make sense if most sites are already in water-limited rangelands where species are adapted to low rainfall, but temperature extremes still shape which species can persist.
+Interesting that, richer plant communities are found in slightly more acidic soils in this dataset.
 
-#Model Performance
+The fact that precipitation wasn’t significant is interesting. It suggests that, in this dataset, temperature stress may be a stronger filter on richness than water availability. This could make sense if most sites are already in water-limited rangelands where species are adapted to low rainfall, but temperature extremes still shape which species can persist.
 
-Good model fit: The reduction from null deviance (1136.99) to residual deviance (796.15) shows your predictors explain a substantial portion of variation in species richness
-Theta = 7.38: This indicates moderate overdispersion is present (if it were very high, like >50, you'd be close to Poisson; low values indicate more overdispersion). The negative binomial is definitely the right choice here.
-DHARMa diagnostics look great: No dispersion issues (p=0.24) and no zero-inflation problems (p=1.0)
+#Ecological Summary – Clay Model
 
-Significant Predictors:
-Minimum Temperature (positive effect, p < 0.001)*
+In clay-dominated rangeland soils, species richness is highest at sites that are warmer at night, cooler during the day, more acidic, and lower in clay and AWC. These conditions reduce cold stress, heat stress, and soil structural constraints, allowing more species to coexist. In contrast, high-clay, high-AWC, alkaline soils favour a smaller set of stress-tolerant dominants, reducing overall richness.
 
-Coefficient: +0.121
-Interpretation: For each 1 SD increase in minimum temperature, species richness increases by ~12.9% (exp(0.121) = 1.129)
-Ecological meaning: Warmer minimum temps (less cold stress) → more species
+#🔍 Significant Predictors and Ecological Interpretation
+#1. Minimum Temperature (positive effect)
 
-#Maximum Temperature (negative effect, p < 0.001)*
+Estimate: +0.1403
 
-Coefficient: -0.188
-Interpretation: For each 1 SD increase in maximum temperature, species richness decreases by ~17.1% (exp(-0.188) = 0.829)
-Ecological meaning: Extreme heat stress → fewer species can tolerate conditions
+exp(Estimate): 1.1505
 
-#pH (negative effect, p < 0.001)*
+Effect: +15.0% richness per 1 SD warmer minimum temperature
 
-Coefficient: -0.139
-Interpretation: For each 1 SD increase in pH (more alkaline), species richness decreases by ~13.0% (exp(-0.139) = 0.870)
-Ecological meaning: More acidic soils support higher diversity in these rangelands
+#Ecological meaning:
+Warmer nights/winters reduce cold stress → more species can persist.
+Common in drylands where frost limits many annuals and forbs.
 
-#Clay percentage (negative effect, p = 0.006)
+#2. Maximum Temperature (negative effect)
 
-Coefficient: -0.044
-Interpretation: For each 1 SD increase in clay, species richness decreases by ~4.3% (exp(-0.044) = 0.957)
-Ecological meaning: Heavier clay soils → lower diversity (possibly due to drainage/aeration issues)
+Estimate: −0.1028
 
-#Phosphorus (marginally significant, p = 0.054)
+exp(Estimate): 0.902
 
-Coefficient: -0.049
-Interpretation: Borderline negative effect; higher P → slightly fewer species
-Ecological meaning: Could indicate competitive exclusion at high nutrient levels, but interpret cautiously
+Effect: −9.8% richness per 1 SD hotter maximum temperature
 
-#Non-significant Predictors:
+#Ecological meaning:
+High daytime heat increases evaporative demand, seedling mortality, and water stress → richness declines as Tmax rises.
 
-Precipitation (p = 0.68): Surprisingly not significant - possibly because temperature already captures moisture stress, or your sites don't span a wide enough precipitation gradient
-Available Water Capacity (p = 0.11): Marginal but not quite significant
-Nitrogen (p = 0.61): No effect
-Sand/Silt (not in model - excluded due to collinearity with clay)
+3. Available Water Capacity (AWC) — negative
 
+Estimate: −0.0525
+
+exp(Estimate): 0.949
+
+Effect: −5.1% richness per 1 SD higher AWC
+
+#Ecological meaning:
+High AWC = finer particles = more clay/silt.
+In Australian rangelands, these soils:
+
+hold water too tightly for plants (not plant-available)
+
+swell/crack
+
+reduce aeration
+
+favour a few clay specialists
+
+So richness is higher on low-AWC, coarse, sandy soils.
+
+#4. Clay Percentage — negative
+
+Estimate: −0.0651
+
+exp(Estimate): 0.937
+
+Effect: −6.3% richness per 1 SD more clay
+
+#Ecological meaning:
+High-clay soils impose strong physical/chemical constraints:
+
+difficult root penetration
+
+structural instability
+
+slow infiltration / poor drainage
+
+They tend to support fewer species → lower richness as clay increases.
+
+#5. Soil pH — negative
+
+Estimate: −0.1468
+
+exp(Estimate): 0.864
+
+Effect: −13.6% richness per 1 SD more alkaline
+
+#Ecological meaning:
+More alkaline soils (often sodic/saline in rangelands) strongly filter species.
+Acidic to slightly acidic soils support higher richness.
+
+🚫 Non-Significant Predictors
+Precipitation (p = 0.706)
+
+No effect once temperature and soil texture are included.
+Interpretation: Water limitation is widespread; rainfall differences don’t add predictive value over soil and thermal stress.
+
+Nitrogen (p = 0.864)
+Phosphorus (p = 0.935)
+
+No detectable influence on richness.
+Interpretation: Nutrients shape productivity more than richness in these systems.
+
+#📊 Model Fit & Diagnostics
+
+Null deviance: 837.3
+
+Residual deviance: 636.6 → substantial deviance explained
+
+Theta: 5.75 → moderate overdispersion; NB is appropriate
+
+AIC: 4403.7
+
+Fisher iterations: 1 → clean convergence
+
+DHARMa: no dispersion or zero-inflation issues
 
 #let's check species richness against the same glm but with sand substiuted for sand
 
@@ -1488,18 +1581,6 @@ Sand/Silt (not in model - excluded due to collinearity with clay)
 
 library(MASS)  # for glm.nb()
 library(DHARMa)  # for diagnostics
-
-######################run this extra bit if sand df has dissapeared
-# Quick fix: just add the sand column to mod_df
-#mod_df$sand_percentage_z <- plot_level_data$sand_percentage_z[
-#  match(mod_df$siteName, plot_level_data$siteName)
-#]
-
-# Verify it worked
-#cat("sand_percentage_z added to mod_df\n")
-#cat("NAs:", sum(is.na(mod_df$sand_percentage_z)), "\n")
-#cat("Range:", range(mod_df$sand_percentage_z, na.rm = TRUE), "\n")
-
 
 # --- Fit Negative Binomial GLM with SAND as predictor ---
 m_rich_sand <- glm.nb(
@@ -1545,7 +1626,7 @@ testZeroInflation(sim_sand)
 ```
 
 
-#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage + more available nutrients = higher diversity. Both models are essentially equivalent in explanatory power.
+#Key insight: Sand and clay are telling the SAME story from opposite directions (they're negatively correlated, remember?). Sandier soils = less clay = better drainage + more available nutrients = higher richness. Both models are essentially equivalent in explanatory power.
 
 #Ecological Story
 rangeland species richness is maximized in:
@@ -1574,50 +1655,13 @@ cat("Choosing SAND model (marginally lower AIC, clearer P effect).\n")
 cat("Clay shows inverse pattern as expected (r = -0.XX between sand/clay).\n")
 
 ```
-#summary# 
-
-```{r}
-# ============================================================================
-# FINAL MODEL SELECTION: SPECIES RICHNESS
-# ============================================================================
-
-cat("=== SPECIES RICHNESS MODEL SELECTION ===\n\n")
-
-cat("Clay vs Sand comparison:\n")
-cat("  Clay model AIC:", round(AIC(m_rich_clay), 2), "\n")
-cat("  Sand model AIC:", round(AIC(m_rich_sand), 2), "\n")
-cat("  ΔAIC =", round(abs(AIC(m_rich_clay) - AIC(m_rich_sand)), 2), "\n\n")
-
-cat("Decision: SAND model selected (ΔAIC < 2 = models equivalent)\n")
-cat("Sand and clay are negatively correlated and represent\n")
-cat("opposite ends of the same soil texture gradient.\n\n")
-
-# Calculate correlation between sand and clay
-cor_sand_clay <- cor(mod_df$sand_percentage_z, 
-                      plot_level_data$clay_percentage_z[
-                        match(mod_df$siteName, plot_level_data$siteName)
-                      ], 
-                      use = "complete.obs")
-
-cat("Correlation between sand and clay:", round(cor_sand_clay, 3), "\n\n")
-
-cat("Final species richness model uses SAND percentage.\n")
-cat("Key findings:\n")
-cat("  • Sand (+): β = +0.047, p = 0.005 → sandier soils = higher richness\n")
-cat("  • Min temp (+): β = +0.118, p < 0.001 → warmer minimums = higher richness\n")  
-cat("  • Max temp (−): β = -0.185, p < 0.001 → cooler maximums = higher richness\n")
-cat("  • pH (−): β = -0.138, p < 0.001 → more acidic soils = higher richness\n")
-cat("  • Phosphorus (−): β = -0.050, p = 0.048 → lower P = higher richness\n\n")
-
-
-```
-#The Overall Ecological Story:
 
 #Species Richness:
-Species richness is highest on coarse-textured, acidic, low-phosphorus soils—conditions typical of freely draining sandy substrates. These soils reduce competitive exclusion and favour the coexistence of many stress-tolerant species. Temperature also influences richness, but soil texture and chemistry act as the primary environmental filters.
+Species richness peaks on sandy, acidic, low-P soils.
+These infertile, freely draining substrates limit dominant competitors and favour a diverse mix of stress-tolerant species. Minimum temperatures boost richness, while extreme maximum temperatures reduce it.
+Negative pH effect = species richness increases as pH goes down (more acidic).
 
-
-#let's create a summary plot of all 4 models
+#let's create a summary plot of the 2 models
 
 ```{r}
 # === Clean coefficient plotting (robust; handles betareg + NB; no Log(nu)) ==
@@ -1738,5 +1782,6 @@ for (nm in names(models)) {
 
 ```
 
+#what now - we are at the end of this workshop - well done!
 
-
+What you can go and do now is see if dropping some of the nonsignificant predictors improves model fit further - in the interests of time - we have left this component up to you.
