@@ -563,7 +563,7 @@ The dataset contain monthly-mean total precipitation for the Australian continen
 Related metadata are available here:
 https://portal.tern.org.au/metadata/NCI/3dc8c462-4605-45b4-8a76-7f96933f1610
 
-## ## Import precipitation data and extract values for the rangeland plots
+## Import precipitation data and extract values for the rangeland plots
 Precipitation data are saved in netCDF files. Individual netCDF files contain monthly-mean total precipitation for Australia. The code extracts monthly values for each plot and calculates the annual cumulative value.   
 ```{r}
 library(terra)
@@ -633,7 +633,7 @@ The plot suggests that species richness increases as annual precipitation increa
 
 
 # SOIL PARAMETERS
-The datasetS used for this tutorial are: 
+The datasets used for this tutorial are: 
 
 Searle, R., Nimalka Somarathna, P. & Malone, B. (2023). Soil and Landscape Grid National Soil Attribute Maps - Available Volumetric Water Capacity (Percent) (3 arc second resolution) Version 2. Version 2.0. Terrestrial Ecosystem Research Network. Dataset. https://dx.doi.org/10.25919/4jwj-na34     
 
@@ -688,7 +688,6 @@ PTO = Total Phosphorus
 Soil parameters are saved as .tif files. 
 
 ## Import soil data and extract values for the rangeland plots
-
 ```{r}
 library(terra)
 library(dplyr)
@@ -703,43 +702,19 @@ parameters <- unique(substr(basename(tif_files), 1, 3))
 plot_points <- vect(plot_level_data, geom = c("longitude_Degree", "latitude_Degree"), crs = "EPSG:4326")
 
 # Loop through each parameter
-# Loop through each parameter
 for (param in parameters) {
   
-  # Select all files for this parameter
-  param_files <- tif_files[substr(basename(tif_files), 1, 3) == param]
+  # Select the single TIFF file for this parameter
+  param_file <- tif_files[substr(basename(tif_files), 1, 3) == param]
   
-  # Load rasters
-  rasters <- rast(param_files)
+  # Load raster (only one layer)
+  r <- rast(param_file)
   
-  # Extract values at plot locations
-  values <- terra::extract(rasters, plot_points)[,-1]  # remove ID column
+  # Extract values at plot locations (returns a 1-column data frame)
+  extracted <- terra::extract(r, plot_points, ID = FALSE)
   
-  # Add as new column to plot_level_data
-  plot_level_data[[param]] <- values
-}
-
-library(dplyr)
-
-
-# Loop through each parameter
-for (param in parameters) {
-  
-  # Select all files for this parameter
-  param_files <- tif_files[substr(basename(tif_files), 1, 3) == param]
-  
-  # Load rasters
-  rasters <- rast(param_files)
-  
-  # Extract values at plot locations
-  extracted_values <- terra::extract(rasters, plot_points, ID = FALSE)
-  
-  # Convert to numeric vector (taking mean if multiple layers)
-  if (ncol(extracted_values) > 1) {
-    plot_level_data[[param]] <- as.numeric(rowMeans(extracted_values, na.rm = TRUE))
-  } else {
-    plot_level_data[[param]] <- as.numeric(extracted_values[, 1])
-  }
+  # Store as a numeric vector
+  plot_level_data[[param]] <- as.numeric(extracted[, 1])
 }
 
 # Remove temporary data
@@ -968,9 +943,34 @@ ggplot(plot_long, aes(x = value, y = species_richness)) +
 
 ```
 The plots suggest that:
-1) Species richness decreases as clay, pH, and silt increase.
-2) Species richness increases as available water capacity, nitrogen, sand, and organic carbon increase. 
+1) Species richness increases as available water capacity, nitrogen, sand, and organic carbon increase. 
+2) Species richness decreases as clay, pH, and silt increase.
 3) There is no strong trend between species richness and phosphorus. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
