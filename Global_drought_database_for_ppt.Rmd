@@ -396,10 +396,919 @@ ggplot(
 # Look at long term trends and/or compare with WMO extreme events
 # Soil moisture ~ soil sand % + soil clay % + soil silt % + precipitation + air temperature + site (or latitude? or ecosystem type?)
  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 # Australia
 #
 # Maps of Australian sites (one map for each variable)
 # Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
+
+# Soil moisture Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soilmoisture_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_swc_percent
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil moisture (percent)",
+      title = paste(
+        "Soil moisture time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+```
+
+
+# Soil temperature Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_soiltemperature_30min_AU <- GERI_soiltemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soiltemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soiltemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_soil_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil temperature (degrees)",
+      title = paste(
+        "Soil temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
+# Air temperature Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_airtemperature_30min_AU <- GERI_airtemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_airtemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_airtemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_air_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean air temperature (degrees)",
+      title = paste(
+        "Air temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
+# Precipitation Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_precipitation_60min_AU <- GERI_precipitation_60min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 61 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_precipitation_60min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_precipitation_60min_AU,
+    aes(
+      x = start_date_time,
+      y = bulk_precipitation_mm
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Cumulative precipitation (mm)",
+      title = paste(
+        "Precipitation time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
 # Plot soil texture data (think of a proper graph)
 # Choose a bird that has a seasonal pattern (import all files and crete plots for each time series, select a few examples) - not in final code
 # 
