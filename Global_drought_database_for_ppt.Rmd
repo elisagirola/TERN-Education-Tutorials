@@ -1,0 +1,1317 @@
+---
+title: "Global drought_database_for_ppt"
+author: "Elisa"
+date: "2026-08-19"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+rm(list=ls()) # cleans the workspace
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Read the files
+```{r}
+library(arrow)
+
+# Main folder
+folder <- "C:/Users/uqegirol/Desktop/Documents/Accelnet project/Data/Global_data"
+
+# Find all Parquet files in the folder and all subfolders
+parquet_files <- list.files(
+  path = folder,
+  pattern = "\\.parquet$",
+  recursive = TRUE,
+  full.names = TRUE,
+  ignore.case = TRUE
+)
+
+# Check how many files were found
+cat("Number of Parquet files found:", length(parquet_files), "\n")
+
+# Read all Parquet files
+parquet_data <- lapply(parquet_files, read_parquet)
+
+# Use the file names as names for the list
+names(parquet_data) <- basename(parquet_files)
+
+```
+
+
+# Convert each Parquet file to a data frame
+```{r}
+df_names <- tools::file_path_sans_ext(basename(parquet_files))
+
+for (i in seq_along(parquet_data)) {
+  assign(
+    df_names[i],
+    as.data.frame(parquet_data[[i]]),
+    envir = .GlobalEnv
+  )
+}
+
+```
+
+
+# Read all XML/EML files from Global_data and subfolders
+```{r}
+# ============================================================
+# Extract site_id and geographic coordinates
+# Separately for each data type
+# ============================================================
+
+library(xml2)
+library(dplyr)
+library(purrr)
+library(tibble)
+
+
+# ------------------------------------------------------------
+# 1. Main folder
+# ------------------------------------------------------------
+
+main_folder <- "C:/Users/uqegirol/Desktop/Documents/Accelnet project/Data/Global_data"
+
+
+# ------------------------------------------------------------
+# 2. Find all XML files
+# ------------------------------------------------------------
+
+xml_files <- list.files(
+  path = main_folder,
+  pattern = "\\.xml$",
+  recursive = TRUE,
+  full.names = TRUE,
+  ignore.case = TRUE
+)
+
+cat("Number of XML files found:", length(xml_files), "\n")
+
+
+# ------------------------------------------------------------
+# 3. Function to extract information from one XML file
+# ------------------------------------------------------------
+
+extract_site_info <- function(xml_file) {
+  
+  # Read XML
+  x <- tryCatch(
+    read_xml(xml_file),
+    error = function(e) {
+      warning("Could not read: ", xml_file)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(x)) {
+    return(NULL)
+  }
+  
+  # Data type = folder containing XML
+  data_type <- basename(dirname(xml_file))
+  
+  
+  # ----------------------------------------------------------
+  # Find ALL site contexts
+  # ----------------------------------------------------------
+  
+  sitecontexts <- xml_find_all(
+    x,
+    ".//*[local-name()='sitecontext']"
+  )
+  
+  
+  # If no sitecontexts are found
+  if (length(sitecontexts) == 0) {
+    return(NULL)
+  }
+  
+  
+  # ----------------------------------------------------------
+  # Extract information from each site
+  # ----------------------------------------------------------
+  
+  map_dfr(seq_along(sitecontexts), function(i) {
+    
+    sitecontext <- sitecontexts[[i]]
+    
+    
+    # --------------------------------------------------------
+    # Site ID
+    # --------------------------------------------------------
+    
+    site_id_node <- xml_find_first(
+      sitecontext,
+      ".//*[local-name()='site_id']"
+    )
+    
+    site_id <- if (!inherits(site_id_node, "xml_missing")) {
+      xml_text(site_id_node)
+    } else {
+      NA_character_
+    }
+    
+    # --------------------------------------------------------
+    # Site name
+    # --------------------------------------------------------
+    
+    site_name_node <- xml_find_first(
+      sitecontext,
+      ".//*[local-name()='site_name']"
+    )
+    
+    site_name <- if (!inherits(site_name_node, "xml_missing")) {
+      xml_text(site_name_node)
+    } else {
+      NA_character_
+    }
+
+
+    # --------------------------------------------------------
+    # Geographic coverage
+    # --------------------------------------------------------
+    
+    geographic_coverages <- xml_find_all(
+      x,
+      ".//*[local-name()='geographicCoverage']"
+    )
+    
+    
+    # Use the geographic coverage corresponding to this site
+    if (i <= length(geographic_coverages)) {
+      
+      geographic_coverage <- geographic_coverages[[i]]
+      
+      west_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='westBoundingCoordinate']"
+      )
+      
+      east_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='eastBoundingCoordinate']"
+      )
+      
+      north_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='northBoundingCoordinate']"
+      )
+      
+      south_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='southBoundingCoordinate']"
+      )
+      
+      west <- if (!inherits(west_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(west_node)))
+      } else {
+        NA_real_
+      }
+      
+      east <- if (!inherits(east_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(east_node)))
+      } else {
+        NA_real_
+      }
+      
+      north <- if (!inherits(north_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(north_node)))
+      } else {
+        NA_real_
+      }
+      
+      south <- if (!inherits(south_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(south_node)))
+      } else {
+        NA_real_
+      }
+      
+      longitude <- mean(c(west, east), na.rm = TRUE)
+      latitude <- mean(c(south, north), na.rm = TRUE)
+      
+      if (is.nan(longitude)) longitude <- NA_real_
+      if (is.nan(latitude)) latitude <- NA_real_
+      
+    } else {
+      
+      latitude <- NA_real_
+      longitude <- NA_real_
+      
+    }
+    
+    
+    # --------------------------------------------------------
+    # Return one row for this site
+    # --------------------------------------------------------
+    
+    tibble(
+      data_type = data_type,
+      site_id = site_id,
+      site_name = site_name,
+      latitude = latitude,
+      longitude = longitude,
+      file = xml_file
+    )
+  })
+}
+
+# ------------------------------------------------------------
+# 4. Extract all XML files
+# ------------------------------------------------------------
+
+all_site_data <- map_dfr(
+  xml_files,
+  extract_site_info
+)
+
+
+# ------------------------------------------------------------
+# 5. Remove records without a site ID
+# ------------------------------------------------------------
+
+all_site_data <- all_site_data %>%
+  filter(!is.na(site_id))
+
+
+# ------------------------------------------------------------
+# 6. Create one table per data type
+# ------------------------------------------------------------
+
+air_temperature <- all_site_data %>%
+  filter(data_type == "Air_temperature") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+precipitation <- all_site_data %>%
+  filter(data_type == "Precipitation") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+soil_moisture <- all_site_data %>%
+  filter(data_type == "Soil_moisture") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name,latitude, longitude)
+
+soil_temperature <- all_site_data %>%
+  filter(data_type == "Soil_temperature") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+soil_texture <- all_site_data %>%
+  filter(data_type == "Soil_texture") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+```
+
+
+# Temporal coverage 
+```{r}
+# Temporal coverage - Air temperature
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+
+# convert the two date columns to proper date-time values
+GERI_airtemperature_30min <- GERI_airtemperature_30min %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    end_date_time = as.POSIXct(end_date_time)
+  )
+
+# determine the gaps in the air-temperature data
+airtemperature_gaps <- GERI_airtemperature_30min %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time)
+  ) %>%
+  filter(!is.na(gap) & gap > 30 * 60)
+
+# turn the data into continuous coverage periods. Each period will become one horizontal segment in the graph, so gaps will be visible.
+airtemperature_periods <- GERI_airtemperature_30min %>%
+  filter(!is.na(mean_air_temp_degC)) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time),
+    period = cumsum(
+      is.na(gap) | gap > 30 * 60
+    )
+  ) %>%
+  group_by(site_id, site_name, period) %>%
+  summarise(
+    start_date = min(start_date_time, na.rm = TRUE),
+    end_date = max(end_date_time, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+```
+
+
+# create the temporal coverage graph
+```{r air-temperature-coverage, fig.width=12, fig.height=15}
+ggplot(
+  airtemperature_periods,
+  aes(
+    x = start_date,
+    xend = end_date,
+    y = site_id,
+    yend = site_id
+  )
+) +
+  geom_segment(linewidth = 3) +
+  labs(
+    title = "Air temperature temporal coverage",
+    x = "Date",
+    y = "Site"
+  ) +
+  theme_minimal()
+
+```
+
+# ELISA ppt
+# GERI db > overview, global prospective, summary data
+
+
+# ELEANOR ppt
+# Australia > correlations between GERI variables and acoustic data (indices and/or time series of bird calls)
+
+
+# WORKSHOP
+# Bring it all together
+# Reading the data files - parquet
+# Reading the metadata files - EML
+
+# The world
+#
+# Create maps (one map for each variable)
+# Create data coverage plots (one for each long-term variable, group by RI)
+# Create anomalies plots (data below or above average) (one for each long-term variable - but may only show the interesting ones)
+# Soil texture data - create plots (think of a proper graph)
+# Look at long term trends and/or compare with WMO extreme events
+# Soil moisture ~ soil sand % + soil clay % + soil silt % + precipitation + air temperature + site (or latitude? or ecosystem type?)
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+# Australia
+#
+# Maps of Australian sites (one map for each variable)
+# Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
+
+# Soil moisture Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soilmoisture_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_swc_percent
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil moisture (percent)",
+      title = paste(
+        "Soil moisture time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+```
+
+
+# Soil temperature Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_soiltemperature_30min_AU <- GERI_soiltemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soiltemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soiltemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_soil_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil temperature (degrees)",
+      title = paste(
+        "Soil temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
+# Air temperature Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_airtemperature_30min_AU <- GERI_airtemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_airtemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_airtemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_air_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean air temperature (degrees)",
+      title = paste(
+        "Air temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
+# Precipitation Australia
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_precipitation_60min_AU <- GERI_precipitation_60min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 61 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_precipitation_60min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_precipitation_60min_AU,
+    aes(
+      x = start_date_time,
+      y = bulk_precipitation_mm
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Cumulative precipitation (mm)",
+      title = paste(
+        "Precipitation time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+
+
+# Plot soil texture data (think of a proper graph)
+# Choose a bird that has a seasonal pattern (import all files and crete plots for each time series, select a few examples) - not in final code
+# 
+# Vocal activity / acoustic indices ~ season + temperature anomaly + precipitation anomaly + site (if same species is at multiple sites)
+# 
