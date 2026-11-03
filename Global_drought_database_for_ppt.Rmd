@@ -1,0 +1,6046 @@
+---
+title: "Global drought_database_for_ppt"
+author: "Elisa"
+date: "2026-08-19"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+
+```{r setup, include=FALSE}
+rm(list=ls()) # cleans the workspace
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Read the files
+```{r}
+library(arrow)
+
+# Main folder
+#folder <- "C:/Users/uqegirol/Desktop/Documents/Accelnet project/Data/Global_data"
+
+#Eleanor Folder
+folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
+
+# Find all Parquet files in the folder and all subfolders
+parquet_files <- list.files(
+  path = folder,
+  pattern = "\\.parquet$",
+  recursive = TRUE,
+  full.names = TRUE,
+  ignore.case = TRUE
+)
+
+# Check how many files were found
+cat("Number of Parquet files found:", length(parquet_files), "\n")
+
+# Read all Parquet files
+parquet_data <- lapply(parquet_files, read_parquet)
+
+# Use the file names as names for the list
+names(parquet_data) <- basename(parquet_files)
+
+```
+
+
+# Convert each Parquet file to a data frame
+```{r}
+df_names <- tools::file_path_sans_ext(basename(parquet_files))
+
+for (i in seq_along(parquet_data)) {
+  assign(
+    df_names[i],
+    as.data.frame(parquet_data[[i]]),
+    envir = .GlobalEnv
+  )
+}
+
+```
+
+
+# Read all XML/EML files from Global_data and subfolders
+```{r}
+# ============================================================
+# Extract site_id and geographic coordinates
+# Separately for each data type
+# ============================================================
+
+library(xml2)
+library(dplyr)
+library(purrr)
+library(tibble)
+
+
+# ------------------------------------------------------------
+# 1. Main folder
+# ------------------------------------------------------------
+
+main_folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
+
+
+# ------------------------------------------------------------
+# 2. Find all XML files
+# ------------------------------------------------------------
+
+xml_files <- list.files(
+  path = main_folder,
+  pattern = "\\.xml$",
+  recursive = TRUE,
+  full.names = TRUE,
+  ignore.case = TRUE
+)
+
+cat("Number of XML files found:", length(xml_files), "\n")
+
+
+# ------------------------------------------------------------
+# 3. Function to extract information from one XML file
+# ------------------------------------------------------------
+
+extract_site_info <- function(xml_file) {
+  
+  # Read XML
+  x <- tryCatch(
+    read_xml(xml_file),
+    error = function(e) {
+      warning("Could not read: ", xml_file)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(x)) {
+    return(NULL)
+  }
+  
+  # Data type = folder containing XML
+  data_type <- basename(dirname(xml_file))
+  
+  
+  # ----------------------------------------------------------
+  # Find ALL site contexts
+  # ----------------------------------------------------------
+  
+  sitecontexts <- xml_find_all(
+    x,
+    ".//*[local-name()='sitecontext']"
+  )
+  
+  
+  # If no sitecontexts are found
+  if (length(sitecontexts) == 0) {
+    return(NULL)
+  }
+  
+  
+  # ----------------------------------------------------------
+  # Extract information from each site
+  # ----------------------------------------------------------
+  
+  map_dfr(seq_along(sitecontexts), function(i) {
+    
+    sitecontext <- sitecontexts[[i]]
+    
+    
+    # --------------------------------------------------------
+    # Site ID
+    # --------------------------------------------------------
+    
+    site_id_node <- xml_find_first(
+      sitecontext,
+      ".//*[local-name()='site_id']"
+    )
+    
+    site_id <- if (!inherits(site_id_node, "xml_missing")) {
+      xml_text(site_id_node)
+    } else {
+      NA_character_
+    }
+    
+    # --------------------------------------------------------
+    # Site name
+    # --------------------------------------------------------
+    
+    site_name_node <- xml_find_first(
+      sitecontext,
+      ".//*[local-name()='site_name']"
+    )
+    
+    site_name <- if (!inherits(site_name_node, "xml_missing")) {
+      xml_text(site_name_node)
+    } else {
+      NA_character_
+    }
+
+
+    # --------------------------------------------------------
+    # Geographic coverage
+    # --------------------------------------------------------
+    
+    geographic_coverages <- xml_find_all(
+      x,
+      ".//*[local-name()='geographicCoverage']"
+    )
+    
+    
+    # Use the geographic coverage corresponding to this site
+    if (i <= length(geographic_coverages)) {
+      
+      geographic_coverage <- geographic_coverages[[i]]
+      
+      west_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='westBoundingCoordinate']"
+      )
+      
+      east_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='eastBoundingCoordinate']"
+      )
+      
+      north_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='northBoundingCoordinate']"
+      )
+      
+      south_node <- xml_find_first(
+        geographic_coverage,
+        ".//*[local-name()='southBoundingCoordinate']"
+      )
+      
+      west <- if (!inherits(west_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(west_node)))
+      } else {
+        NA_real_
+      }
+      
+      east <- if (!inherits(east_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(east_node)))
+      } else {
+        NA_real_
+      }
+      
+      north <- if (!inherits(north_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(north_node)))
+      } else {
+        NA_real_
+      }
+      
+      south <- if (!inherits(south_node, "xml_missing")) {
+        suppressWarnings(as.numeric(xml_text(south_node)))
+      } else {
+        NA_real_
+      }
+      
+      longitude <- mean(c(west, east), na.rm = TRUE)
+      latitude <- mean(c(south, north), na.rm = TRUE)
+      
+      if (is.nan(longitude)) longitude <- NA_real_
+      if (is.nan(latitude)) latitude <- NA_real_
+      
+    } else {
+      
+      latitude <- NA_real_
+      longitude <- NA_real_
+      
+    }
+    
+    
+    # --------------------------------------------------------
+    # Return one row for this site
+    # --------------------------------------------------------
+    
+    tibble(
+      data_type = data_type,
+      site_id = site_id,
+      site_name = site_name,
+      latitude = latitude,
+      longitude = longitude,
+      file = xml_file
+    )
+  })
+}
+
+# ------------------------------------------------------------
+# 4. Extract all XML files
+# ------------------------------------------------------------
+
+all_site_data <- map_dfr(
+  xml_files,
+  extract_site_info
+)
+
+
+# ------------------------------------------------------------
+# 5. Remove records without a site ID
+# ------------------------------------------------------------
+
+all_site_data <- all_site_data %>%
+  filter(!is.na(site_id))
+
+
+# ------------------------------------------------------------
+# 6. Create one table per data type
+# ------------------------------------------------------------
+
+air_temperature <- all_site_data %>%
+  filter(data_type == "Air_temperature") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+precipitation <- all_site_data %>%
+  filter(data_type == "Precipitation") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+soil_moisture <- all_site_data %>%
+  filter(data_type == "Soil_moisture") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name,latitude, longitude)
+
+soil_temperature <- all_site_data %>%
+  filter(data_type == "Soil_temperature") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+soil_texture <- all_site_data %>%
+  filter(data_type == "Soil_texture") %>%
+  distinct(site_id, .keep_all = TRUE) %>%
+  select(site_id, site_name, latitude, longitude)
+
+```
+
+
+# Temporal coverage 
+```{r}
+# Temporal coverage - Air temperature
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+
+# convert the two date columns to proper date-time values
+GERI_airtemperature_30min <- GERI_airtemperature_30min %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    end_date_time = as.POSIXct(end_date_time)
+  )
+
+# determine the gaps in the air-temperature data
+airtemperature_gaps <- GERI_airtemperature_30min %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time)
+  ) %>%
+  filter(!is.na(gap) & gap > 30 * 60)
+
+# turn the data into continuous coverage periods. Each period will become one horizontal segment in the graph, so gaps will be visible.
+airtemperature_periods <- GERI_airtemperature_30min %>%
+  filter(!is.na(mean_air_temp_degC)) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time),
+    period = cumsum(
+      is.na(gap) | gap > 30 * 60
+    )
+  ) %>%
+  group_by(site_id, site_name, period) %>%
+  summarise(
+    start_date = min(start_date_time, na.rm = TRUE),
+    end_date = max(end_date_time, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+```
+
+
+# create the temporal coverage graph
+```{r air-temperature-coverage, fig.width=12, fig.height=15}
+ggplot(
+  airtemperature_periods,
+  aes(
+    x = start_date,
+    xend = end_date,
+    y = site_id,
+    yend = site_id
+  )
+) +
+  geom_segment(linewidth = 3) +
+  labs(
+    title = "Air temperature temporal coverage",
+    x = "Date",
+    y = "Site"
+  ) +
+  theme_minimal()
+
+```
+
+# ELISA ppt
+# GERI db > overview, global prospective, summary data
+
+
+# ELEANOR ppt
+# Australia > correlations between GERI variables and acoustic data (indices and/or time series of bird calls)
+
+
+# WORKSHOP
+# Bring it all together
+# Reading the data files - parquet
+# Reading the metadata files - EML
+
+# The world
+#
+# Create maps (one map for each variable)
+# Create data coverage plots (one for each long-term variable, group by RI)
+# Create anomalies plots (data below or above average) (one for each long-term variable - but may only show the interesting ones)
+# Soil texture data - create plots (think of a proper graph)
+# Look at long term trends and/or compare with WMO extreme events
+# Soil moisture ~ soil sand % + soil clay % + soil silt % + precipitation + air temperature + site (or latitude? or ecosystem type?)
+ 
+ 
+ 
+```{r}
+
+# Explore the geographic coverage of the datasets
+
+# Count the number of sites for each variable
+site_counts <- all_site_data %>%
+  group_by(data_type) %>%
+  summarise(
+    n_sites = n_distinct(site_id),
+    n_with_coordinates = n_distinct(
+      site_id[!is.na(latitude) & !is.na(longitude)]
+    ),
+    .groups = "drop"
+  )
+
+# Display the results
+print(site_counts)
+
+```
+```{r}
+
+# Check the geographic extent of the sites
+
+all_site_data %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  summarise(
+    minimum_latitude = min(latitude),
+    maximum_latitude = max(latitude),
+    minimum_longitude = min(longitude),
+    maximum_longitude = max(longitude)
+  )
+
+```
+```{r}
+
+
+## 3. Where are the monitoring sites located?
+
+#Mapping environmental monitoring sites allows us to visualise their geographic distribution and identify regions where observations may be limited.
+
+#We will first create a combined global map showing all environmental variables, followed by separate maps for each variable. This will help us identify overlapping monitoring sites and compare geographic coverage.
+
+
+# Load the package containing world map boundaries
+library(maps)
+
+# Prepare the site coordinates for mapping
+# Keep one record per site for each environmental variable
+site_map_data <- all_site_data %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  distinct(data_type, site_id, .keep_all = TRUE)
+
+# Load world map boundaries
+world <- ggplot2::map_data("world")
+
+
+# ------------------------------------------------------------
+# 1. Combined map showing all environmental variables
+# ------------------------------------------------------------
+
+combined_map <- ggplot() +
+  geom_polygon(
+    data = world,
+    aes(x = long, y = lat, group = group),
+    fill = "grey90",
+    colour = "white"
+  ) +
+  geom_point(
+    data = site_map_data,
+    aes(x = longitude, y = latitude, colour = data_type),
+    size = 2,
+    alpha = 0.7
+  ) +
+  coord_quickmap() +
+  labs(
+    title = "Global distribution of environmental monitoring sites",
+    x = "Longitude",
+    y = "Latitude",
+    colour = "Environmental variable"
+  ) +
+  theme_minimal()
+
+# Display the combined map
+print(combined_map)
+
+
+# ------------------------------------------------------------
+# 2. Separate maps for each environmental variable
+# ------------------------------------------------------------
+
+separate_maps <- ggplot() +
+  geom_polygon(
+    data = world,
+    aes(x = long, y = lat, group = group),
+    fill = "grey90",
+    colour = "white"
+  ) +
+  
+geom_point(
+  data = site_map_data,
+  aes(x = longitude, y = latitude, colour = data_type),
+  size = 2,
+  alpha = 0.7
+) +
+
+  coord_quickmap() +
+  facet_wrap(~ data_type, ncol = 2) +
+  labs(
+    title = "Geographic coverage by environmental variable",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal()
+
+# Display the five separate maps
+print(separate_maps)
+```
+
+```{r}
+
+# Check whether the environmental variables share the same sites
+# This helps us determine whether the similar maps are expected.
+
+# Create a list of site IDs for each environmental variable
+site_lists <- split(
+  site_map_data$site_id,
+  site_map_data$data_type
+)
+
+# Compare the site IDs between environmental variables
+# TRUE means both variables have exactly the same site IDs
+# FALSE means their site lists differ
+
+site_comparison <- outer(
+  names(site_lists),
+  names(site_lists),
+  Vectorize(function(x, y) {
+    setequal(site_lists[[x]], site_lists[[y]])
+  })
+)
+
+# Add variable names to the comparison table
+dimnames(site_comparison) <- list(
+  names(site_lists),
+  names(site_lists)
+)
+
+# Display the results
+print(site_comparison)
+
+```
+
+```{r}
+
+# List the imported Parquet datasets
+names(parquet_data)
+
+# Display the column names in each dataset
+lapply(parquet_data, names)
+
+```
+ 
+```{r}
+
+# Check the earliest and latest observations in each dataset
+
+
+# Summarise the environmental datasets
+# Show observations, sites, research infrastructures and date ranges
+
+library(dplyr)
+
+data_summary <- bind_rows(
+  lapply(names(parquet_data), function(file) {
+
+    x <- parquet_data[[file]]
+
+    # Static soil texture data use date_collected
+    # Other datasets use start_date_time and end_date_time
+    if ("start_date_time" %in% names(x)) {
+      first_date <- min(as.Date(x$start_date_time), na.rm = TRUE)
+      last_date <- max(as.Date(x$end_date_time), na.rm = TRUE)
+    } else {
+      first_date <- min(as.Date(x$date_collected), na.rm = TRUE)
+      last_date <- max(as.Date(x$date_collected), na.rm = TRUE)
+    }
+
+    data.frame(
+      dataset = tools::file_path_sans_ext(file),
+      observations = nrow(x),
+      sites = n_distinct(x$site_id),
+      research_infrastructures = n_distinct(x$research_infrastructure),
+      first_date = first_date,
+      last_date = last_date
+    )
+  })
+)
+
+# Display all five datasets in one table
+print(data_summary)
+
+```
+ 
+ 
+```{r}
+
+# Summarise air temperature coverage by research infrastructure
+# Count sites and identify the earliest and latest observations
+
+air_coverage_summary <- GERI_airtemperature_30min %>%
+  group_by(research_infrastructure) %>%
+  summarise(
+    n_sites = n_distinct(site_id),
+    first_date = as.Date(min(start_date_time, na.rm = TRUE)),
+    last_date = as.Date(max(end_date_time, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
+# Display the summary table
+print(air_coverage_summary)
+
+```
+ 
+```{r}
+
+# Summarise temporal coverage for all four environmental variables
+# Soil texture is excluded because it is not a time-series dataset
+
+# Identify the four time-series datasets
+time_series_files <- c(
+  "GERI_airtemperature_30min.parquet",
+  "GERI_precipitation_60min.parquet",
+  "GERI_soilmoisture_30min.parquet",
+  "GERI_soiltemperature_30min.parquet"
+)
+
+# Give the variables readable names
+variable_names <- c(
+  "Air temperature",
+  "Precipitation",
+  "Soil moisture",
+  "Soil temperature"
+)
+
+# Combine the summaries into one table
+coverage_summary <- bind_rows(
+  lapply(seq_along(time_series_files), function(i) {
+
+    parquet_data[[time_series_files[i]]] %>%
+      group_by(research_infrastructure) %>%
+      summarise(
+        n_sites = n_distinct(site_id),
+        first_date = as.Date(min(start_date_time, na.rm = TRUE)),
+        last_date = as.Date(max(end_date_time, na.rm = TRUE)),
+        .groups = "drop"
+      ) %>%
+      mutate(variable = variable_names[i], .before = 1)
+
+  })
+)
+
+# Display the combined table
+print(coverage_summary, n = Inf)
+
+```
+ 
+ 
+```{r}
+
+# ------------------------------------------------------------
+# 4. How does temporal coverage differ between environmental variables?
+# ------------------------------------------------------------
+
+# Environmental datasets may differ in the periods over which
+# observations have been collected.
+#
+# Comparing temporal coverage helps us identify which datasets
+# may be suitable for investigating long-term environmental
+# changes, including drought.
+#
+# This graph shows the earliest and latest observations for
+# each research infrastructure, separately for four variables.
+#
+# Note: Lines show the overall date range, not continuous
+# monitoring throughout that period.
+
+
+# Create a temporal coverage graph
+ggplot(
+  coverage_summary,
+  aes(
+    x = first_date,
+    xend = last_date,
+    y = research_infrastructure,
+    yend = research_infrastructure,
+    colour = research_infrastructure
+  )
+) +
+  geom_segment(linewidth = 3) +
+  facet_wrap(~ variable, ncol = 2) +
+  labs(
+    title = "Temporal coverage of environmental observations",
+    x = "Date",
+    y = "Research infrastructure",
+    colour = "Research infrastructure"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none"
+  )
+
+
+# ------------------------------------------------------------
+# Explore the results
+# ------------------------------------------------------------
+
+# Which research infrastructure has the longest observation period?
+# Do all environmental variables cover the same years?
+# Which datasets might be most useful for investigating long-term drought?
+# Why might the overall date range be misleading when assessing
+# whether observations are suitable for time-series analysis?
+
+```
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Australia
+# Maps of Australian sites (one map for each variable)
+# Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
+
+
+```{r}
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soilmoisture_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_swc_percent
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil moisture (percent)",
+      title = paste(
+        "Soil moisture time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+```
+
+#soil moisture australia
+```{r}
+# Australia
+#
+# Maps of Australian sites (one map for each variable)
+# Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
+
+# Soil moisture Australia
+
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soilmoisture_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_swc_percent
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil moisture (percent)",
+      title = paste(
+        "Soil moisture time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+```
+
+```{r}
+
+## Soil temperature Australia
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_soiltemperature_30min_AU <- GERI_soiltemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 31,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_soiltemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_soiltemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_soil_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean soil temperature (degrees)",
+      title = paste(
+        "Soil temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+```
+
+
+
+
+
+
+```{r}
+
+## Air temperature Australia
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_airtemperature_30min_AU <- GERI_airtemperature_30min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 31 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_airtemperature_30min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_airtemperature_30min_AU,
+    aes(
+      x = start_date_time,
+      y = mean_air_temp_degC
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Mean air temperature (degrees)",
+      title = paste(
+        "Air temperature time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+```{r}
+## Precipitation Australia
+# Select only sites with AU- in the site_id
+# Convert date-time and identify gaps in the 30-minute time series
+GERI_precipitation_60min_AU <- GERI_precipitation_60min %>%
+  filter(grepl("AU-", site_id)) %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  ) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id) %>%
+  mutate(
+    time_gap = as.numeric(
+      difftime(
+        start_date_time,
+        lag(start_date_time),
+        units = "mins"
+      )
+    ),
+    # Start a new line segment when there is a gap
+    # of more than 61 minutes
+    segment = cumsum(
+      if_else(
+        is.na(time_gap) | time_gap > 61,
+        1,
+        0
+      )
+    )
+  ) %>%
+  ungroup()
+
+# Number of sites
+n_sites <- n_distinct(GERI_precipitation_60min_AU$site_id)
+
+# Number of pages needed (9 sites per page)
+n_pages <- ceiling(n_sites / 9)
+
+cat("Number of AU sites:", n_sites, "\n")
+cat("Number of pages:", n_pages, "\n")
+
+# Create one plot per page
+for (page in 1:n_pages) {
+  
+  p <- ggplot(
+    GERI_precipitation_60min_AU,
+    aes(
+      x = start_date_time,
+      y = bulk_precipitation_mm
+    )
+  ) +
+    geom_line(
+      aes(group = interaction(site_id, segment))
+    ) +
+    facet_wrap_paginate(
+      ~ site_id,
+      ncol = 3,
+      nrow = 3,
+      page = page,
+      scales = "free_x"
+    ) +
+    labs(
+      x = "Date",
+      y = "Cumulative precipitation (mm)",
+      title = paste(
+        "Precipitation time series — AU sites",
+        "(page", page, "of", n_pages, ")"
+      )
+    ) +
+    theme_bw()
+  
+  print(p)
+}
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Australian environmental monitoring sites
+# ------------------------------------------------------------
+
+# Select Australian sites from the site metadata
+# Keep one location per monitoring site
+
+australian_sites <- all_site_data %>%
+  filter(grepl("AU-", site_id)) %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  distinct(site_id, site_name, latitude, longitude)
+
+# Check how many Australian sites are available
+nrow(australian_sites)
+
+# Obtain the outline of Australia
+australia_map <- map_data("world", region = "Australia")
+
+# Map the Australian monitoring sites
+ggplot() +
+  geom_polygon(
+    data = australia_map,
+    aes(x = long, y = lat, group = group),
+    fill = "grey90",
+    colour = "grey40"
+  ) +
+  geom_point(
+    data = australian_sites,
+    aes(x = longitude, y = latitude),
+    colour = "darkred",
+    size = 2.5
+  ) +
+  coord_quickmap() +
+  labs(
+    title = "Australian environmental monitoring sites",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+
+# Find Robson Creek in the site metadata
+
+all_site_data %>%
+  filter(grepl("Robson", site_name, ignore.case = TRUE)) %>%
+  distinct(site_id, site_name, latitude, longitude)
+
+```
+
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: daily mean soil temperature
+# ------------------------------------------------------------
+
+library(dplyr)
+library(ggplot2)
+
+# Select Robson Creek soil temperature observations
+robson_soiltemperature <- GERI_soiltemperature_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    date = as.Date(start_date_time)
+  )
+
+# Calculate daily mean soil temperature
+robson_soiltemperature_daily <- robson_soiltemperature %>%
+  group_by(date) %>%
+  summarise(
+    mean_soil_temperature = mean(
+      mean_soil_temp_degC,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(mean_soil_temperature))
+
+# Plot daily mean soil temperature
+ggplot(
+  robson_soiltemperature_daily,
+  aes(
+    x = date,
+    y = mean_soil_temperature
+  )
+) +
+  geom_line() +
+  labs(
+    title = "Robson Creek: daily mean soil temperature",
+    subtitle = "Robson Creek Flux Station, Queensland",
+    x = "Date",
+    y = "Mean soil temperature (°C)"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: daily mean air temperature
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# Compare the timing and magnitude of temperature changes.
+# Does air temperature show a similar increase during 2024–2025?
+
+library(dplyr)
+library(ggplot2)
+
+# Select Robson Creek air temperature observations
+robson_airtemperature <- GERI_airtemperature_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    date = as.Date(start_date_time)
+  )
+
+# Calculate daily mean air temperature
+robson_airtemperature_daily <- robson_airtemperature %>%
+  group_by(date) %>%
+  summarise(
+    mean_air_temperature = mean(
+      mean_air_temp_degC,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(mean_air_temperature))
+
+# Plot daily mean air temperature
+ggplot(
+  robson_airtemperature_daily,
+  aes(
+    x = date,
+    y = mean_air_temperature
+  )
+) +
+  geom_line() +
+  labs(
+    title = "Robson Creek: daily mean air temperature",
+    subtitle = "Robson Creek Flux Station, Queensland",
+    x = "Date",
+    y = "Mean air temperature (°C)"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: daily mean soil moisture
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil moisture change when soil temperature increased?
+#
+# Could drier soil have contributed to the higher temperatures?
+#
+# Did the removal of the large tree alter soil moisture
+# through changes in shading, evaporation or water uptake?
+#
+# Examine the soil moisture pattern during 2024–2025.
+# Is there a sustained change or just seasonal variation?
+
+library(dplyr)
+library(ggplot2)
+
+# Select Robson Creek soil moisture observations
+robson_soilmoisture <- GERI_soilmoisture_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    date = as.Date(start_date_time)
+  )
+
+# Calculate daily mean soil moisture
+robson_soilmoisture_daily <- robson_soilmoisture %>%
+  group_by(date) %>%
+  summarise(
+    mean_soil_moisture = mean(
+      mean_swc_percent,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(mean_soil_moisture))
+
+# Plot daily mean soil moisture
+ggplot(
+  robson_soilmoisture_daily,
+  aes(
+    x = date,
+    y = mean_soil_moisture
+  )
+) +
+  geom_line() +
+  labs(
+    title = "Robson Creek: daily mean soil moisture",
+    subtitle = "Robson Creek Flux Station, Queensland",
+    x = "Date",
+    y = "Mean soil moisture (%)"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+
+
+# ------------------------------------------------------------
+# Robson Creek: daily precipitation
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did precipitation decline during 2024–2025?
+#
+# Could reduced rainfall explain the decline in soil moisture?
+#
+# Does the timing of rainfall changes correspond with the
+# unusual increase in soil temperature?
+#
+# Display daily precipitation from 0 to 150 mm.
+
+ggplot(
+  robson_precipitation_daily,
+  aes(
+    x = date,
+    y = daily_precipitation
+  )
+) +
+  geom_col() +
+  coord_cartesian(ylim = c(0, 150)) +
+  labs(
+    title = "Robson Creek: daily precipitation",
+    subtitle = "Robson Creek Flux Station, Queensland",
+    x = "Date",
+    y = "Daily precipitation (mm)"
+  ) +
+  theme_minimal()
+
+
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly soil temperature and soil moisture
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperature increase at the same time that
+# soil moisture decreased?
+#
+# When did these changes begin?
+#
+# Are the changes consistent with normal seasonal patterns,
+# or do they represent a shift in local soil conditions?
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# Examine the period 2023–2026 to investigate the recent changes.
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Calculate monthly mean soil temperature
+# ------------------------------------------------------------
+
+robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
+  mutate(month = floor_date(date, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    soil_temperature = mean(
+      mean_soil_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 2. Calculate monthly mean soil moisture
+# ------------------------------------------------------------
+
+robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
+  mutate(month = floor_date(date, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    soil_moisture = mean(
+      mean_soil_moisture,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 3. Combine the two monthly datasets
+# ------------------------------------------------------------
+
+robson_monthly_soil <- full_join(
+  robson_soiltemperature_monthly,
+  robson_soilmoisture_monthly,
+  by = "month"
+) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  ) %>%
+  pivot_longer(
+    cols = c(soil_temperature, soil_moisture),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    variable = recode(
+      variable,
+      soil_temperature = "Soil temperature (°C)",
+      soil_moisture = "Soil moisture (%)"
+    )
+  )
+
+# ------------------------------------------------------------
+# 4. Plot the monthly averages
+# ------------------------------------------------------------
+
+ggplot(
+  robson_monthly_soil,
+  aes(x = month, y = value)
+) +
+  geom_line() +
+  geom_point(size = 1.5) +
+  facet_wrap(
+    ~ variable,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly soil temperature and moisture",
+    subtitle = "January 2023–2026",
+    x = "Month",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# Identify the month when soil temperature begins to rise
+# beyond its earlier seasonal pattern.
+#
+# Does soil moisture decline during the same months?
+#
+# Is there a delay between the two changes?
+#
+# Could both patterns be explained by seasonal variation?
+#
+# Would comparing the same months in earlier years help
+# distinguish seasonal effects from a possible canopy effect?
+#
+# IMPORTANT:
+# These observations do not establish that tree removal
+# caused the changes. The event date, rainfall patterns,
+# sensor history and other environmental factors should
+# also be investigated.
+
+```
+# let's add average monthly precipitation as well
+
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly soil temperature, soil moisture
+# and precipitation
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# Did soil moisture decline when soil temperature increased?
+#
+# Was the decline in soil moisture associated with reduced rainfall?
+#
+# If rainfall remained relatively consistent, could changes
+# in canopy cover or local soil conditions help explain the results?
+#
+# Examine the timing of changes across all three variables.
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Calculate monthly mean soil temperature
+# ------------------------------------------------------------
+
+robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
+  mutate(month = floor_date(date, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    soil_temperature = mean(
+      mean_soil_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 2. Calculate monthly mean soil moisture
+# ------------------------------------------------------------
+
+robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
+  mutate(month = floor_date(date, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    soil_moisture = mean(
+      mean_soil_moisture,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 3. Calculate monthly total precipitation
+# ------------------------------------------------------------
+
+# Sum daily precipitation totals to obtain monthly rainfall.
+# Count days with observations to help assess data completeness.
+
+robson_precipitation_monthly <- robson_precipitation_daily %>%
+  mutate(month = floor_date(date, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    precipitation = sum(daily_precipitation, na.rm = TRUE),
+    days_with_data = n(),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 4. Combine the three monthly datasets
+# ------------------------------------------------------------
+
+robson_monthly_environment <- robson_soiltemperature_monthly %>%
+  full_join(
+    robson_soilmoisture_monthly,
+    by = "month"
+  ) %>%
+  full_join(
+    robson_precipitation_monthly,
+    by = "month"
+  ) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  ) %>%
+  select(month, soil_temperature, soil_moisture, precipitation) %>%
+  pivot_longer(
+    cols = c(soil_temperature, soil_moisture, precipitation),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    variable = factor(
+      variable,
+      levels = c(
+        "soil_moisture",
+        "soil_temperature",
+        "precipitation"
+      ),
+      labels = c(
+        "Soil moisture (%)",
+        "Soil temperature (°C)",
+        "Monthly precipitation (mm)"
+      )
+    )
+  )
+
+# ------------------------------------------------------------
+# 5. Plot all three variables
+# ------------------------------------------------------------
+
+ggplot(
+  robson_monthly_environment,
+  aes(x = month, y = value)
+) +
+  geom_line() +
+  geom_point(size = 1.5) +
+  facet_wrap(
+    ~ variable,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly environmental conditions",
+    subtitle = "Soil moisture, soil temperature and precipitation (2023–2026)",
+    x = "Month",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. When does soil temperature begin to increase?
+#
+# 2. Does soil moisture decline during the same period?
+#
+# 3. Does precipitation also decline, or does rainfall
+#    remain relatively consistent?
+#
+# 4. Could reduced rainfall explain the soil moisture decline?
+#
+# 5. If rainfall does not decline, what other mechanisms
+#    could explain the changes in soil temperature and moisture?
+#
+# 6. Is the timing consistent with the reported tree removal?
+#
+# IMPORTANT:
+# Monthly rainfall totals may be underestimated where
+# observations are missing. Check days_with_data before
+# interpreting unusually low monthly rainfall.
+#
+# Correlation between variables does not establish causation.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: check monthly precipitation data completeness
+# ------------------------------------------------------------
+
+# How many days contain precipitation observations each month?
+# Low rainfall totals may reflect missing observations rather
+# than genuinely dry conditions.
+
+robson_precipitation_monthly %>%
+  filter(month >= as.Date("2023-01-01")) %>%
+  select(month, precipitation, days_with_data) %>%
+  print(n = Inf)
+
+```
+
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: check hourly rainfall observations
+# September to November 2025
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Were the zero monthly rainfall totals genuine?
+#
+# Did the precipitation sensor continue reporting observations?
+#
+# Were measurements missing, or were all recorded values zero?
+#
+# This check helps distinguish possible drought conditions
+# from potential sensor or data-quality problems.
+
+GERI_precipitation_60min %>%
+  filter(
+    site_id == "AU-Rob",
+    as.Date(start_date_time) >= as.Date("2025-09-01"),
+    as.Date(start_date_time) <= as.Date("2025-11-30")
+  ) %>%
+  mutate(
+    month = format(as.Date(start_date_time), "%Y-%m")
+  ) %>%
+  group_by(month) %>%
+  summarise(
+    total_records = n(),
+    valid_records = sum(!is.na(bulk_precipitation_mm)),
+    missing_records = sum(is.na(bulk_precipitation_mm)),
+    positive_rainfall_records = sum(
+      bulk_precipitation_mm > 0,
+      na.rm = TRUE
+    ),
+    maximum_hourly_rainfall = if (
+      all(is.na(bulk_precipitation_mm))
+    ) NA_real_ else max(
+      bulk_precipitation_mm,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+```
+##NOTE check with PI for Robson Creek re whether these months were genuine zero entries....
+
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly soil temperature anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# An anomaly is the difference between an observed temperature
+# and the historical average for the same calendar month.
+
+
+# ------------------------------------------------------------
+# What is a soil temperature anomaly?
+# ------------------------------------------------------------
+
+# A temperature anomaly measures how much an observed temperature
+# differs from the historical average for the same time of year.
+#
+# For Robson Creek, we use 2013–2023 as the reference period.
+#
+# Step 1: Calculate the mean soil temperature for each month
+#         in the Robson Creek dataset.
+#
+# Step 2: For each calendar month (January, February, etc.),
+#         calculate the average of the monthly means across
+#         the 2013–2023 reference period.
+#
+# Step 3: Subtract the historical average for that calendar
+#         month from the observed monthly mean temperature.
+#
+# Soil temperature anomaly (°C) =
+#   Observed monthly mean - Historical mean for the same month
+#
+# For example:
+# If the historical October mean was 22°C and the observed
+# October 2025 mean was 32°C, the anomaly would be +10°C.
+#
+# Positive anomalies indicate warmer-than-average conditions.
+# Negative anomalies indicate cooler-than-average conditions.
+#
+# This approach accounts for normal seasonal temperature
+# variation, making unusual changes easier to identify.
+#
+# The baseline is specific to Robson Creek and is not a
+# standard 30-year climatological reference period.
+#
+# IMPORTANT:
+# An anomaly identifies a departure from historical conditions.
+# It does not establish what caused that departure.
+# ------------------------------------------------------------
+
+#
+# Positive anomaly = warmer than the historical monthly average
+# Negative anomaly = cooler than the historical monthly average
+#
+# Questions:
+# 1. When do unusually warm soil temperatures begin?
+# 2. How large are the recent anomalies?
+# 3. Are the anomalies sustained across multiple months?
+# 4. Is the pattern consistent with a local canopy change?
+# 5. What other explanations should be considered?
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Calculate monthly mean soil temperature
+# ------------------------------------------------------------
+
+robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
+  mutate(
+    month = floor_date(date, unit = "month")
+  ) %>%
+  group_by(month) %>%
+  summarise(
+    soil_temperature = mean(
+      mean_soil_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 2. Calculate the historical seasonal baseline
+# ------------------------------------------------------------
+
+# Use 2013–2023 as the provisional reference period
+# Calculate the average for each calendar month
+
+robson_soil_baseline <- robson_soiltemperature_monthly %>%
+  mutate(
+    year = year(month),
+    calendar_month = month(month)
+  ) %>%
+  filter(
+    year >= 2013,
+    year <= 2023
+  ) %>%
+  group_by(calendar_month) %>%
+  summarise(
+    baseline_temperature = mean(
+      soil_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 3. Calculate monthly temperature anomalies
+# ------------------------------------------------------------
+
+robson_soil_anomalies <- robson_soiltemperature_monthly %>%
+  mutate(
+    calendar_month = month(month)
+  ) %>%
+  left_join(
+    robson_soil_baseline,
+    by = "calendar_month"
+  ) %>%
+  mutate(
+    temperature_anomaly =
+      soil_temperature - baseline_temperature
+  ) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  )
+
+# ------------------------------------------------------------
+# 4. Plot monthly soil temperature anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  robson_soil_anomalies,
+  aes(
+    x = month,
+    y = temperature_anomaly
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  geom_col(
+    aes(fill = temperature_anomaly > 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "firebrick",
+      "FALSE" = "steelblue"
+    )
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly soil temperature anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline",
+    x = "Month",
+    y = "Soil temperature anomaly (°C)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# Are recent soil temperatures consistently above the
+# historical seasonal average?
+#
+# Does the anomaly begin abruptly or increase gradually?
+#
+# How does the magnitude of the anomaly compare with
+# earlier years?
+#
+# Could tree removal explain the change in soil microclimate?
+#
+# IMPORTANT:
+# The anomaly does not establish causation.
+# Confirm the tree-removal date and investigate sensor history
+# before attributing the change to canopy removal.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly soil moisture anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil moisture decline at the same time that soil
+# temperature increased?
+#
+# Is the recent decline in soil moisture unusual compared
+# with historical conditions for the same time of year?
+#
+# Could changes in rainfall, evaporation, vegetation water
+# uptake or canopy cover help explain the observed pattern?
+
+
+# ------------------------------------------------------------
+# What is a soil moisture anomaly?
+# ------------------------------------------------------------
+
+# A soil moisture anomaly measures how much observed soil
+# moisture differs from the historical average for the
+# same calendar month.
+#
+# For Robson Creek, we use 2013–2023 as the reference period.
+#
+# Step 1: Calculate mean soil moisture for each month.
+#
+# Step 2: For each calendar month (January, February, etc.),
+#         calculate the average of monthly means across
+#         the 2013–2023 reference period.
+#
+# Step 3: Subtract the historical average for that calendar
+#         month from the observed monthly mean soil moisture.
+#
+# Soil moisture anomaly (percentage points) =
+#   Observed monthly mean - Historical mean for the same month
+#
+# Example:
+# If the historical October mean was 30% and the observed
+# October 2025 mean was 20%, the anomaly would be -10
+# percentage points.
+#
+# Positive anomalies indicate wetter-than-average soil.
+# Negative anomalies indicate drier-than-average soil.
+#
+# This is a site-specific historical baseline, not a
+# standard 30-year climatological reference period.
+#
+# IMPORTANT:
+# An anomaly identifies a departure from historical conditions.
+# It does not establish what caused that departure.
+
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+
+# ------------------------------------------------------------
+# 1. Calculate monthly mean soil moisture
+# ------------------------------------------------------------
+
+robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
+  mutate(
+    month = floor_date(date, unit = "month")
+  ) %>%
+  group_by(month) %>%
+  summarise(
+    soil_moisture = mean(
+      mean_soil_moisture,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 2. Calculate the historical seasonal baseline
+# ------------------------------------------------------------
+
+robson_moisture_baseline <- robson_soilmoisture_monthly %>%
+  mutate(
+    year = year(month),
+    calendar_month = month(month)
+  ) %>%
+  filter(
+    year >= 2013,
+    year <= 2023
+  ) %>%
+  group_by(calendar_month) %>%
+  summarise(
+    baseline_moisture = mean(
+      soil_moisture,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 3. Calculate monthly soil moisture anomalies
+# ------------------------------------------------------------
+
+robson_moisture_anomalies <- robson_soilmoisture_monthly %>%
+  mutate(
+    calendar_month = month(month)
+  ) %>%
+  left_join(
+    robson_moisture_baseline,
+    by = "calendar_month"
+  ) %>%
+  mutate(
+    moisture_anomaly = soil_moisture - baseline_moisture
+  ) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  )
+
+
+# ------------------------------------------------------------
+# 4. Plot monthly soil moisture anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  robson_moisture_anomalies,
+  aes(
+    x = month,
+    y = moisture_anomaly
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  geom_col(
+    aes(fill = moisture_anomaly > 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "steelblue",
+      "FALSE" = "firebrick"
+    )
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly soil moisture anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline",
+    x = "Month",
+    y = "Soil moisture anomaly (percentage points)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. Are soil moisture anomalies consistently negative
+#    during the period of increasing soil temperature?
+#
+# 2. When do negative anomalies first appear?
+#
+# 3. Are the recent negative anomalies more extreme
+#    than those observed in earlier years?
+#
+# 4. Could rainfall variation explain the soil moisture
+#    anomalies, or might local soil conditions contribute?
+#
+# 5. Do the timing and magnitude of changes support
+#    investigating the reported tree-removal event?
+#
+# Remember:
+# Correlation does not establish causation.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly precipitation anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did rainfall decline during the period when soil
+# temperature increased and soil moisture decreased?
+#
+# Were recent rainfall totals unusually low compared
+# with historical conditions for the same time of year?
+#
+# Could reduced rainfall explain the negative soil
+# moisture anomalies observed during 2025?
+#
+# Does the timing of rainfall anomalies correspond with
+# the increase in soil temperature?
+
+
+# ------------------------------------------------------------
+# What is a precipitation anomaly?
+# ------------------------------------------------------------
+
+# A precipitation anomaly measures how much rainfall in a
+# particular month differs from the historical average
+# rainfall for that same calendar month.
+#
+# For Robson Creek, we use 2013–2023 as the reference period.
+#
+# Step 1: Sum daily rainfall to calculate the total
+#         precipitation recorded in each month.
+#
+# Step 2: For each calendar month (January, February, etc.),
+#         calculate the average monthly rainfall total
+#         across the 2013–2023 reference period.
+#
+# Step 3: Subtract the historical average from the observed
+#         monthly rainfall total.
+#
+# Precipitation anomaly (mm) =
+#   Observed monthly total - Historical mean monthly total
+#
+# Example:
+# If the historical October average was 150 mm and
+# October 2025 recorded 50 mm, the anomaly would be -100 mm.
+#
+# Positive anomalies indicate wetter-than-average months.
+# Negative anomalies indicate drier-than-average months.
+#
+# IMPORTANT DATA QUALITY NOTE:
+#
+# September, October and November 2025 contain zero
+# recorded precipitation despite hourly observations.
+#
+# These values may reflect equipment failure or another
+# data-quality issue. This has not yet been confirmed.
+#
+# The anomalies for these months must therefore be
+# treated as provisional and should not be interpreted
+# as evidence of drought until verified with the PI.
+
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+
+# ------------------------------------------------------------
+# 1. Calculate monthly precipitation totals
+# ------------------------------------------------------------
+
+robson_precipitation_monthly <- robson_precipitation_daily %>%
+  mutate(
+    month = floor_date(date, unit = "month")
+  ) %>%
+  group_by(month) %>%
+  summarise(
+    precipitation = sum(
+      daily_precipitation,
+      na.rm = TRUE
+    ),
+    days_with_data = n(),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 2. Calculate the historical seasonal baseline
+# ------------------------------------------------------------
+
+robson_precipitation_baseline <- robson_precipitation_monthly %>%
+  mutate(
+    year = year(month),
+    calendar_month = month(month)
+  ) %>%
+  filter(
+    year >= 2013,
+    year <= 2023
+  ) %>%
+  group_by(calendar_month) %>%
+  summarise(
+    baseline_precipitation = mean(
+      precipitation,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 3. Calculate monthly precipitation anomalies
+# ------------------------------------------------------------
+
+robson_precipitation_anomalies <- robson_precipitation_monthly %>%
+  mutate(
+    calendar_month = month(month)
+  ) %>%
+  left_join(
+    robson_precipitation_baseline,
+    by = "calendar_month"
+  ) %>%
+  mutate(
+    precipitation_anomaly =
+      precipitation - baseline_precipitation
+  ) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  )
+
+
+# ------------------------------------------------------------
+# 4. Plot monthly precipitation anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  robson_precipitation_anomalies,
+  aes(
+    x = month,
+    y = precipitation_anomaly
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  geom_col(
+    aes(fill = precipitation_anomaly > 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "steelblue",
+      "FALSE" = "firebrick"
+    )
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly precipitation anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline; late 2025 data unverified",
+    x = "Month",
+    y = "Precipitation anomaly (mm)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. Were precipitation anomalies predominantly negative
+#    during the period of increasing soil temperature?
+#
+# 2. Do negative precipitation anomalies coincide with
+#    negative soil moisture anomalies?
+#
+# 3. Were there unusually wet months immediately before
+#    the apparent decline in rainfall?
+#
+# 4. Could rainfall variation explain some of the changes
+#    in soil moisture and soil temperature?
+#
+# 5. How might equipment failure affect our interpretation
+#    of precipitation anomalies?
+#
+# IMPORTANT:
+# September–November 2025 precipitation data require
+# confirmation from the PI before ecological interpretation.
+#
+# Monthly totals can also be underestimated when hourly
+# measurements are missing, even if each day has some data.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: monthly air temperature anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# Did air temperature increase during 2024–2025?
+#
+# Are recent air temperatures unusual compared with historical
+# conditions for the same time of year?
+#
+# Do air temperature anomalies correspond with the pronounced
+# positive soil temperature anomalies?
+
+
+# ------------------------------------------------------------
+# What is an air temperature anomaly?
+# ------------------------------------------------------------
+
+# An air temperature anomaly measures how much the observed
+# monthly mean temperature differs from the historical
+# average for the same calendar month.
+#
+# For Robson Creek, we use 2013–2023 as the reference period.
+#
+# Step 1: Calculate the mean air temperature for each month.
+#
+# Step 2: For each calendar month (January, February, etc.),
+#         calculate the average of monthly means across
+#         the 2013–2023 reference period.
+#
+# Step 3: Subtract the historical average for that calendar
+#         month from the observed monthly mean temperature.
+#
+# Air temperature anomaly (°C) =
+#   Observed monthly mean - Historical mean for the same month
+#
+# Example:
+# If the historical October mean was 21°C and the observed
+# October 2025 mean was 22°C, the anomaly would be +1°C.
+#
+# Positive anomalies indicate warmer-than-average conditions.
+# Negative anomalies indicate cooler-than-average conditions.
+#
+# This is a site-specific historical baseline, not a
+# standard 30-year climatological reference period.
+#
+# IMPORTANT:
+# An anomaly identifies a departure from historical conditions.
+# It does not establish what caused that departure.
+
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+
+# ------------------------------------------------------------
+# 1. Calculate daily mean air temperature
+# ------------------------------------------------------------
+
+robson_airtemperature_daily <- GERI_airtemperature_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    date = as.Date(start_date_time)
+  ) %>%
+  group_by(date) %>%
+  summarise(
+    mean_air_temperature = mean(
+      mean_air_temp_degC,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(mean_air_temperature))
+
+
+# ------------------------------------------------------------
+# 2. Calculate monthly mean air temperature
+# ------------------------------------------------------------
+
+robson_airtemperature_monthly <- robson_airtemperature_daily %>%
+  mutate(
+    month = floor_date(date, unit = "month")
+  ) %>%
+  group_by(month) %>%
+  summarise(
+    air_temperature = mean(
+      mean_air_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 3. Calculate the historical seasonal baseline
+# ------------------------------------------------------------
+
+robson_air_baseline <- robson_airtemperature_monthly %>%
+  mutate(
+    year = year(month),
+    calendar_month = month(month)
+  ) %>%
+  filter(
+    year >= 2013,
+    year <= 2023
+  ) %>%
+  group_by(calendar_month) %>%
+  summarise(
+    baseline_temperature = mean(
+      air_temperature,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 4. Calculate monthly air temperature anomalies
+# ------------------------------------------------------------
+
+robson_air_anomalies <- robson_airtemperature_monthly %>%
+  mutate(
+    calendar_month = month(month)
+  ) %>%
+  left_join(
+    robson_air_baseline,
+    by = "calendar_month"
+  ) %>%
+  mutate(
+    temperature_anomaly =
+      air_temperature - baseline_temperature
+  ) %>%
+  filter(
+    month >= as.Date("2023-01-01"),
+    month <= as.Date("2026-12-31")
+  )
+
+
+# ------------------------------------------------------------
+# 5. Plot monthly air temperature anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  robson_air_anomalies,
+  aes(
+    x = month,
+    y = temperature_anomaly
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  geom_col(
+    aes(fill = temperature_anomaly > 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "firebrick",
+      "FALSE" = "steelblue"
+    )
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: monthly air temperature anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline",
+    x = "Month",
+    y = "Air temperature anomaly (°C)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. Are air temperature anomalies consistently positive
+#    during 2024–2025?
+#
+# 2. How large are the air temperature anomalies compared
+#    with the soil temperature anomalies?
+#
+# 3. Does air temperature show a similar upward shift
+#    to soil temperature?
+#
+# 4. If soil temperature anomalies are much larger than
+#    air temperature anomalies, what local environmental
+#    changes could explain the difference?
+#
+# 5. Could canopy removal, changes in soil exposure or
+#    sensor conditions explain the observed soil warming?
+#
+# IMPORTANT:
+# Confirm the timing of tree removal and any changes
+# in instrumentation before drawing causal conclusions.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: soil versus air temperature anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# Both anomalies use the same historical reference period
+# (2013–2023) and are measured in degrees Celsius.
+#
+# This allows us to compare the magnitude and timing of
+# temperature changes directly on the same graph.
+#
+# Questions:
+# 1. When do soil and air temperature anomalies begin to diverge?
+# 2. How much larger are soil temperature anomalies?
+# 3. Does soil temperature increase while air temperature
+#    remains relatively stable?
+# 4. Could canopy removal explain the divergence?
+# 5. What other explanations should be investigated?
+
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+
+# ------------------------------------------------------------
+# 1. Combine the existing anomaly datasets
+# ------------------------------------------------------------
+
+# These datasets were created in the previous chunks.
+# No need to recalculate the historical baselines.
+
+robson_temperature_comparison <- robson_soil_anomalies %>%
+  select(
+    month,
+    soil_temperature_anomaly = temperature_anomaly
+  ) %>%
+  inner_join(
+    robson_air_anomalies %>%
+      select(
+        month,
+        air_temperature_anomaly = temperature_anomaly
+      ),
+    by = "month"
+  ) %>%
+  pivot_longer(
+    cols = c(
+      soil_temperature_anomaly,
+      air_temperature_anomaly
+    ),
+    names_to = "variable",
+    values_to = "anomaly"
+  ) %>%
+  mutate(
+    variable = recode(
+      variable,
+      soil_temperature_anomaly = "Soil temperature",
+      air_temperature_anomaly = "Air temperature"
+    )
+  )
+
+
+# ------------------------------------------------------------
+# 2. Plot soil and air temperature anomalies together
+# ------------------------------------------------------------
+
+ggplot(
+  robson_temperature_comparison,
+  aes(
+    x = month,
+    y = anomaly,
+    colour = variable
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  scale_colour_manual(
+    values = c(
+      "Soil temperature" = "firebrick",
+      "Air temperature" = "steelblue"
+    )
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: soil versus air temperature anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline",
+    x = "Month",
+    y = "Temperature anomaly (°C)",
+    colour = "Variable"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    ),
+    legend.position = "bottom"
+  )
+
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# Do soil and air temperature anomalies follow similar
+# patterns before 2024?
+#
+# When does the soil temperature anomaly begin to increase
+# more rapidly than the air temperature anomaly?
+#
+# How large is the difference by late 2025?
+#
+# Is the divergence consistent with a change in shading
+# or soil surface exposure following tree removal?
+#
+# Could sensor relocation, instrument changes or changes
+# in measurement depth explain some of the divergence?
+#
+# IMPORTANT:
+# This graph demonstrates differences in temperature
+# anomalies but does not establish the cause.
+# Confirm the tree-removal date and sensor history
+# before drawing conclusions.
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: soil moisture versus precipitation anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did unusually low rainfall coincide with unusually low
+# soil moisture during 2025?
+#
+# Does soil moisture respond immediately to changes in
+# precipitation, or is there a delay?
+#
+# Could changes in soil moisture reflect local changes
+# in vegetation, evaporation or canopy cover?
+#
+# Both anomalies use the 2013–2023 historical baseline.
+#
+# IMPORTANT:
+# September–November 2025 rainfall readings are unverified.
+# Possible equipment failure must be investigated with the PI.
+# These months are shown but should not be interpreted as
+# confirmed drought conditions.
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# ------------------------------------------------------------
+# 1. Combine the existing anomaly datasets
+# ------------------------------------------------------------
+
+robson_moisture_rainfall_comparison <- robson_moisture_anomalies %>%
+  select(
+    month,
+    `Soil moisture anomaly (percentage points)` = moisture_anomaly
+  ) %>%
+  full_join(
+    robson_precipitation_anomalies %>%
+      select(
+        month,
+        `Precipitation anomaly (mm)` = precipitation_anomaly
+      ),
+    by = "month"
+  ) %>%
+  pivot_longer(
+    cols = -month,
+    names_to = "variable",
+    values_to = "anomaly"
+  ) %>%
+  mutate(
+    variable = factor(
+      variable,
+      levels = c(
+        "Soil moisture anomaly (percentage points)",
+        "Precipitation anomaly (mm)"
+      )
+    )
+  )
+
+# ------------------------------------------------------------
+# 2. Plot both anomalies with separate y-axis scales
+# ------------------------------------------------------------
+
+ggplot(
+  robson_moisture_rainfall_comparison,
+  aes(x = month, y = anomaly)
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_col(
+    aes(fill = anomaly >= 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "steelblue",
+      "FALSE" = "firebrick"
+    )
+  ) +
+  facet_wrap(
+    ~ variable,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: soil moisture and precipitation anomalies",
+    subtitle = "2013–2023 seasonal baseline; late-2025 rainfall unverified",
+    x = "Month",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. Do negative precipitation anomalies occur before,
+#    during or after negative soil moisture anomalies?
+#
+# 2. Are soil moisture anomalies negative even when
+#    precipitation anomalies are positive?
+#
+# 3. Could there be a delayed soil moisture response
+#    to changes in rainfall?
+#
+# 4. How does uncertainty in the rainfall measurements
+#    affect our interpretation?
+
+```
+```{r}
+
+# ------------------------------------------------------------
+# Robson Creek: comparison of four environmental anomalies
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Did soil temperatures increase because the surrounding air
+# became hotter, or because conditions at the soil surface changed?
+#
+# If soil temperature rises dramatically while air temperature
+# maintains its previous seasonal pattern, that would strengthen
+# the case for a local canopy effect.
+#
+# How do soil temperature, air temperature, soil moisture and
+# precipitation anomalies compare over the same period?
+#
+# All anomalies are calculated relative to the 2013–2023
+# historical seasonal baseline for Robson Creek.
+#
+# Temperature anomalies are measured in degrees Celsius.
+# Soil moisture anomalies are measured in percentage points.
+# Precipitation anomalies are measured in millimetres.
+#
+# Each variable has its own y-axis scale to avoid misleading
+# comparisons between different measurement units.
+#
+# IMPORTANT DATA QUALITY NOTE:
+# September–November 2025 precipitation readings are unverified.
+# The zero rainfall readings may reflect equipment failure.
+# Confirmation from the PI is required before interpreting
+# these months as evidence of drought.
+
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+
+knitr::opts_current$set(fig.width = 12, fig.height = 12)
+
+
+
+
+# ------------------------------------------------------------
+# 1. Combine the four existing anomaly datasets
+# ------------------------------------------------------------
+
+robson_all_anomalies <- robson_soil_anomalies %>%
+  select(
+    month,
+    soil_temperature = temperature_anomaly
+  ) %>%
+  full_join(
+    robson_air_anomalies %>%
+      select(
+        month,
+        air_temperature = temperature_anomaly
+      ),
+    by = "month"
+  ) %>%
+  full_join(
+    robson_moisture_anomalies %>%
+      select(
+        month,
+        soil_moisture = moisture_anomaly
+      ),
+    by = "month"
+  ) %>%
+  full_join(
+    robson_precipitation_anomalies %>%
+      select(
+        month,
+        precipitation = precipitation_anomaly
+      ),
+    by = "month"
+  ) %>%
+  pivot_longer(
+    cols = -month,
+    names_to = "variable",
+    values_to = "anomaly"
+  ) %>%
+  mutate(
+    variable = factor(
+      variable,
+      levels = c(
+        "soil_temperature",
+        "air_temperature",
+        "soil_moisture",
+        "precipitation"
+      ),
+      labels = c(
+        "Soil temperature anomaly (°C)",
+        "Air temperature anomaly (°C)",
+        "Soil moisture anomaly (percentage points)",
+        "Precipitation anomaly (mm)"
+      )
+    )
+  )
+
+
+# ------------------------------------------------------------
+# 2. Plot all four anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  robson_all_anomalies,
+  aes(
+    x = month,
+    y = anomaly
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_col(
+    aes(fill = anomaly >= 0),
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "steelblue",
+      "FALSE" = "firebrick"
+    )
+  ) +
+  facet_wrap(
+    ~ variable,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    title = "Robson Creek: environmental anomalies",
+    subtitle = "Relative to the 2013–2023 seasonal baseline; late-2025 rainfall unverified",
+    x = "Month",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# 1. When does the soil temperature anomaly begin to diverge
+#    from the air temperature anomaly?
+#
+# 2. Does the increase in soil temperature precede the
+#    decline in soil moisture?
+#
+# 3. Do negative precipitation anomalies coincide with
+#    negative soil moisture anomalies?
+#
+# 4. Could reduced rainfall explain the soil temperature
+#    increase, or did warming begin earlier?
+#
+# 5. What evidence supports a possible local canopy effect?
+#
+# 6. What additional information is required to distinguish
+#    environmental change from instrumentation problems?
+#
+# Consider:
+# - Timing of tree removal
+# - Soil temperature sensor location and depth
+# - Sensor maintenance and calibration records
+# - Precipitation equipment performance
+# - Changes in canopy cover and solar exposure
+#
+# IMPORTANT:
+# These patterns demonstrate associations and departures
+# from historical conditions, not causation.
+
+
+```
+```{r}
+###REMOVE THIS FROM THE FINAL CODE - JUST SHOWS THAT ROBSON CK DOES NOT HAVE BIRD CALLS FOR THE TIME PERIOD OF THE SOIL TEMP ANOMALY
+
+# ------------------------------------------------------------
+# Robson Creek: temporal coverage of bird acoustic records
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# How long have acoustic records been collected for each species?
+#
+# Do the records overlap with the environmental changes
+# observed at Robson Creek during 2024–2025?
+#
+# Are there gaps in the monitoring period?
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Identify the nine Robson Creek species datasets
+# ------------------------------------------------------------
+
+species_names <- c(
+  "Gerygone_mouki",
+  "Macropygia_phasianella",
+  "Megaloprepia_magnifica",
+  "Meliphaga_lewinii",
+  "Orthonyx_spaldingii",
+  "Ptilinopus_superbus",
+  "Rhipidura_albiscapa",
+  "Rhipidura_rufifrons",
+  "Sericornis_magnirostra"
+)
+
+# Search the existing workshop folder and its subfolders.
+
+species_files <- list.files(
+  path = folder,
+  pattern = "\\.csv$",
+  recursive = TRUE,
+  full.names = TRUE
+)
+
+species_files <- species_files[
+  vapply(
+    basename(species_files),
+    function(x) any(vapply(
+      species_names,
+      grepl,
+      logical(1),
+      x = x,
+      fixed = TRUE
+    )),
+    logical(1)
+  )
+]
+
+# ------------------------------------------------------------
+# 2. Extract the dates from each dataset
+# ------------------------------------------------------------
+
+species_coverage <- lapply(species_files, function(file) {
+
+  data <- read.csv(file, check.names = FALSE)
+
+  # Identify a date or timestamp column.
+
+  date_columns <- grep(
+    "date|timestamp|recorded|eventstart",
+    names(data),
+    ignore.case = TRUE,
+    value = TRUE
+  )
+
+  if (length(date_columns) == 0) {
+    stop(paste("No date column found in:", basename(file)))
+  }
+
+  # Convert the first matching column to dates.
+
+  dates <- as.Date(
+    parse_date_time(
+      as.character(data[[date_columns[1]]]),
+      orders = c(
+        "ymd HMS", "ymd HM", "ymd",
+        "dmy HMS", "dmy HM", "dmy",
+        "mdy HMS", "mdy HM", "mdy"
+      ),
+      quiet = TRUE
+    )
+  )
+
+  # Extract the species name from the filename.
+
+  species <- species_names[
+    vapply(
+      species_names,
+      function(x) grepl(x, basename(file), fixed = TRUE),
+      logical(1)
+    )
+  ][1]
+
+  data.frame(
+    species = gsub("_", " ", species),
+    date = dates
+  )
+
+}) %>%
+  bind_rows() %>%
+  filter(!is.na(date))
+
+# ------------------------------------------------------------
+# 3. Identify months containing acoustic records
+# ------------------------------------------------------------
+
+# Plot actual months with records rather than joining the
+# first and last dates across potentially large data gaps.
+
+species_months <- species_coverage %>%
+  mutate(month = floor_date(date, "month")) %>%
+  distinct(species, month)
+
+# ------------------------------------------------------------
+# 4. Plot temporal coverage for each species
+# ------------------------------------------------------------
+
+ggplot(
+  species_months,
+  aes(x = month, y = species)
+) +
+  geom_tile(
+    fill = "steelblue",
+    height = 0.7,
+    width = 25
+  ) +
+  scale_x_date(
+    date_breaks = "1 year",
+    date_labels = "%Y"
+  ) +
+  labs(
+    title = "Robson Creek: temporal coverage of bird acoustic records",
+    subtitle = "Coloured months contain acoustic records",
+    x = "Year",
+    y = "Species"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    panel.grid.minor = element_blank()
+  )
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which species have the longest acoustic records?
+#
+# 2. Are all nine species monitored over the same period?
+#
+# 3. Are there gaps in acoustic monitoring?
+#
+# 4. Do any records extend into 2024–2025?
+#
+# 5. Which species have sufficient temporal coverage
+#    for investigating ecological change?
+
+```
+##CHECKING IF TUMBARUMBA HAS AIR TEMP / SOIL TEMP ANOMALY
+
+```{r}
+
+# ------------------------------------------------------------
+# Tumbarumba: soil temperature and soil moisture through time
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# How have soil temperature and soil moisture changed at
+# Tumbarumba Wet Eucalypt SuperSite?
+#
+# Are there changes associated with the December 2019 bushfire?
+#
+# Do the environmental records overlap with the available
+# bird acoustic monitoring data?
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+
+# ------------------------------------------------------------
+# 1. Calculate monthly soil temperature
+# ------------------------------------------------------------
+
+tumba_temperature <- GERI_soiltemperature_30min %>%
+  filter(grepl("Tumbarumba", site_name, ignore.case = TRUE)) %>%
+  mutate(month = floor_date(as.Date(start_date_time), "month")) %>%
+  group_by(month) %>%
+  summarise(
+    value = if (all(is.na(mean_soil_temp_degC))) NA_real_
+            else mean(mean_soil_temp_degC, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(variable = "Soil temperature (°C)")
+
+# ------------------------------------------------------------
+# 2. Calculate monthly soil moisture
+# ------------------------------------------------------------
+
+tumba_moisture <- GERI_soilmoisture_30min %>%
+  filter(grepl("Tumbarumba", site_name, ignore.case = TRUE)) %>%
+  mutate(month = floor_date(as.Date(start_date_time), "month")) %>%
+  group_by(month) %>%
+  summarise(
+    value = if (all(is.na(mean_swc_percent))) NA_real_
+            else mean(mean_swc_percent, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(variable = "Soil moisture (%)")
+
+# ------------------------------------------------------------
+# 3. Combine and plot the environmental records
+# ------------------------------------------------------------
+
+tumba_environment <- bind_rows(
+  tumba_temperature,
+  tumba_moisture
+)
+
+ggplot(
+  tumba_environment,
+  aes(x = month, y = value)
+) +
+  geom_line(colour = "steelblue", linewidth = 0.7,
+            na.rm = TRUE) +
+  geom_vline(
+    xintercept = as.Date("2019-12-31"),
+    linetype = "dashed",
+    colour = "firebrick"
+  ) +
+  facet_wrap(
+    ~ variable,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_date(
+    date_breaks = "2 year",
+    date_labels = "%Y"
+  ) +
+  labs(
+    title = "Tumbarumba: soil temperature and moisture",
+    subtitle = "Dashed red line: bushfire on 31 December 2019",
+    x = "Year",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title.x = element_text(colour = "black")
+  )
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Does soil temperature show a long-term increase?
+#
+# 2. Are there periods of unusually low soil moisture?
+#
+# 3. Are there visible changes around the 2019 bushfire?
+#
+# 4. Are there gaps in the environmental monitoring record?
+#
+# 5. Which years could support comparison with bird detections?
+
+```
+#see if bird calls match black summer bush fire at Tumbarumba....
+
+```{r}
+
+# ------------------------------------------------------------
+# Tumbarumba: bird acoustic records before and after bushfire
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Do the available bird acoustic datasets contain records
+# from both before and after the Black Summer bushfires?
+#
+# Which species have sufficient temporal coverage to support
+# a comparison of acoustic activity?
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Select Tumbarumba acoustic datasets
+# ------------------------------------------------------------
+
+# Use the acoustic datasets already loaded into R.
+
+tumba_acoustic <- acoustic_data[
+  grepl("NSW-", names(acoustic_data), fixed = TRUE)
+]
+
+# ------------------------------------------------------------
+# 2. Identify date columns and extract recording dates
+# ------------------------------------------------------------
+
+tumba_dates <- lapply(names(tumba_acoustic), function(file) {
+
+  data <- tumba_acoustic[[file]]
+
+  # Find likely date or timestamp fields.
+
+  date_column <- grep(
+    "date|timestamp|eventstart|recorded",
+    names(data),
+    ignore.case = TRUE,
+    value = TRUE
+  )
+
+  if (length(date_column) == 0) {
+    return(NULL)
+  }
+
+  # Convert the first matching date column.
+
+  dates <- as.Date(
+    parse_date_time(
+      as.character(data[[date_column[1]]]),
+      orders = c(
+        "ymd HMS", "ymd HM", "ymd",
+        "dmy HMS", "dmy HM", "dmy",
+        "mdy HMS", "mdy HM", "mdy"
+      ),
+      quiet = TRUE
+    )
+  )
+
+  # Extract the species name from the filename.
+
+  species <- sub(
+    ".*NSW-", "",
+    file
+  )
+
+  species <- sub(
+    "-TERNJCU.*", "",
+    species
+  )
+
+  data.frame(
+    species = gsub("_", " ", species),
+    date = dates
+  )
+
+}) %>%
+  bind_rows() %>%
+  filter(!is.na(date))
+
+# ------------------------------------------------------------
+# 3. Summarise annual acoustic coverage
+# ------------------------------------------------------------
+
+tumba_years <- tumba_dates %>%
+  mutate(year = year(date)) %>%
+  distinct(species, year)
+
+# ------------------------------------------------------------
+# 4. Plot species records through time
+# ------------------------------------------------------------
+
+ggplot(
+  tumba_years,
+  aes(x = year, y = species)
+) +
+  geom_tile(
+    fill = "steelblue",
+    width = 0.85,
+    height = 0.7
+  ) +
+  geom_vline(
+    xintercept = 2019.997,
+    colour = "firebrick",
+    linetype = "dashed"
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      floor(min(tumba_years$year)),
+      ceiling(max(tumba_years$year)),
+      by = 1
+    )
+  ) +
+  labs(
+    title = "Tumbarumba: temporal coverage of bird acoustic records",
+    subtitle = "Dashed red line: Black Summer bushfire, December 2019",
+    x = "Year",
+    y = "Bird species"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    panel.grid.minor = element_blank()
+  )
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which bird species have records before December 2019?
+#
+# 2. Which species have records after December 2019?
+#
+# 3. Are there species with records in both periods?
+#
+# 4. Could these datasets support a before-and-after
+#    comparison of bird acoustic activity?
+#
+# Note:
+# A year with records does not necessarily represent
+# continuous monitoring throughout that year.
+
+```
+##  triple check bird acoustic data
+
+```{r}
+
+# Check the earliest and latest acoustic record for each species.
+
+tumba_dates %>%
+  group_by(species) %>%
+  summarise(
+    first_record = min(date),
+    last_record = max(date),
+    observations = n(),
+    .groups = "drop"
+  ) %>%
+  print(n = Inf, width = Inf)
+
+```
+
+#determine which bird species occur across multiple sites:
+
+```{r}
+
+# ------------------------------------------------------------
+# Ecoacoustics: species and monitoring site summary
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Which bird species are represented in our acoustic datasets?
+# Are any species recorded at more than one monitoring site?
+# Which species could support comparisons between sites?
+
+library(dplyr)
+
+# ------------------------------------------------------------
+# 1. Extract species and site information
+# ------------------------------------------------------------
+
+acoustic_sites <- bind_rows(
+  lapply(names(acoustic_data), function(file) {
+
+    data <- acoustic_data[[file]]
+
+    if (!"SiteName" %in% names(data)) {
+      return(NULL)
+    }
+
+    species <- sub(".*-", "", sub("-TERNJCU.*", "", file))
+
+    # Extract the scientific name from the filename.
+    species <- sub(".*(?:NSW|QLD)-", "", file)
+    species <- sub("-TERNJCU.*", "", species)
+
+    data.frame(
+      species = gsub("_", " ", species),
+      site = data$SiteName
+    )
+  })
+) %>%
+  filter(!is.na(site), site != "") %>%
+  distinct(species, site)
+
+# ------------------------------------------------------------
+# 2. Summarise all species and their sites
+# ------------------------------------------------------------
+
+species_site_summary <- acoustic_sites %>%
+  group_by(species) %>%
+  summarise(
+    number_of_sites = n_distinct(site),
+    sites = paste(sort(unique(site)), collapse = ", "),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(number_of_sites), species)
+
+# ------------------------------------------------------------
+# 3. Display results directly in the Console
+# ------------------------------------------------------------
+
+cat("\nSPECIES AND MONITORING SITES\n\n")
+
+print(
+  species_site_summary,
+  n = Inf,
+  width = Inf
+)
+
+cat(
+  "\nSpecies found at multiple sites:",
+  sum(species_site_summary$number_of_sites > 1),
+  "\n"
+)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Are any species represented at multiple sites?
+# 2. Which species and sites could be compared?
+# 3. Should we focus on seasonal activity at one site instead?
+
+
+```
+
+# generate table with species only at multiple sites
+```{r}
+
+# ------------------------------------------------------------
+# Ecoacoustics: bird species recorded at multiple sites
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Which bird species have acoustic datasets from multiple
+# TERN monitoring sites?
+#
+# Standardise species names before comparing sites.
+
+library(dplyr)
+
+# ------------------------------------------------------------
+# 1. Extract and standardise species names
+# ------------------------------------------------------------
+
+acoustic_sites <- bind_rows(
+  lapply(names(acoustic_data), function(file) {
+
+    data <- acoustic_data[[file]]
+
+    if (!"SiteName" %in% names(data)) {
+      return(NULL)
+    }
+
+    # Remove the filename prefix, including state codes.
+    # Keep the scientific name between the final state
+    # code separator and the -TERNJCU suffix.
+
+    species <- basename(file)
+
+    species <- sub(
+      "^.*(NSW|QLD|NT|SA|TAS|VIC|WA)-",
+      "",
+      species
+    )
+
+    species <- sub("-TERNJCU.*$", "", species)
+    species <- gsub("_", " ", species)
+
+    data.frame(
+      species = species,
+      site = data$SiteName
+    )
+  })
+) %>%
+  filter(!is.na(site), site != "") %>%
+  distinct(species, site)
+
+# ------------------------------------------------------------
+# 2. Summarise species occurring at multiple sites
+# ------------------------------------------------------------
+
+species_site_summary <- acoustic_sites %>%
+  group_by(species) %>%
+  summarise(
+    number_of_sites = n_distinct(site),
+    sites = paste(sort(unique(site)), collapse = ", "),
+    .groups = "drop"
+  ) %>%
+  filter(number_of_sites > 1) %>%
+  arrange(desc(number_of_sites), species)
+
+# ------------------------------------------------------------
+# 3. Display a concise table
+# ------------------------------------------------------------
+
+cat("\nSPECIES RECORDED AT MULTIPLE SITES\n\n")
+
+print(
+  species_site_summary,
+  n = Inf,
+  width = Inf
+)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which species occur across the most monitoring sites?
+#
+# 2. Do these sites represent contrasting ecosystems?
+#
+# 3. Do the acoustic recording periods overlap?
+#
+# 4. Could seasonal vocal activity be compared across sites?
+
+```
+
+#does grey fantail occur at multiple sites:
+
+```{r}
+
+# ------------------------------------------------------------
+# Grey Fantail: temporal coverage across monitoring sites
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Are Grey Fantail acoustic records available across
+# comparable time periods at different monitoring sites?
+#
+# This determines whether a cross-site comparison of
+# seasonal vocal activity is feasible.
+
+library(dplyr)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Select Grey Fantail datasets
+# ------------------------------------------------------------
+
+grey_fantail_files <- names(acoustic_data)[
+  grepl("Rhipidura[_ ]albiscapa", names(acoustic_data))
+]
+
+# ------------------------------------------------------------
+# 2. Extract recording dates and monitoring sites
+# ------------------------------------------------------------
+
+grey_fantail_coverage <- bind_rows(
+  lapply(grey_fantail_files, function(file) {
+
+    data <- acoustic_data[[file]]
+
+    date_columns <- grep(
+      "date|timestamp|eventstart|recorded",
+      names(data),
+      ignore.case = TRUE,
+      value = TRUE
+    )
+
+    if (length(date_columns) == 0) {
+      return(NULL)
+    }
+
+    dates <- as.Date(
+      parse_date_time(
+        as.character(data[[date_columns[1]]]),
+        orders = c(
+          "ymd HMS", "ymd HM", "ymd",
+          "dmy HMS", "dmy HM", "dmy"
+        ),
+        quiet = TRUE
+      )
+    )
+
+    data.frame(
+      site = data$SiteName,
+      date = dates
+    )
+  })
+) %>%
+  filter(!is.na(date))
+
+# ------------------------------------------------------------
+# 3. Summarise temporal coverage by site
+# ------------------------------------------------------------
+
+grey_fantail_coverage %>%
+  group_by(site) %>%
+  summarise(
+    first_record = min(date),
+    last_record = max(date),
+    observations = n(),
+    years = n_distinct(year(date)),
+    .groups = "drop"
+  ) %>%
+  arrange(site) %>%
+  print(n = Inf, width = Inf)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which sites have the longest Grey Fantail records?
+#
+# 2. Do the recording periods overlap?
+#
+# 3. Are there sufficient observations at each site?
+#
+# 4. Could seasonal vocal activity be compared across sites?
+
+```
+#what does the grey fan tail data include:
+```{r}
+
+# ------------------------------------------------------------
+# Grey Fantail: identify acoustic activity measurements
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# What measurement can we use to investigate seasonal
+# Grey Fantail vocal activity across monitoring sites?
+#
+# Identify candidate detection or acoustic measurement
+# fields without printing the entire dataset.
+
+# Use the first Grey Fantail dataset.
+
+grey_example <- acoustic_data[[grey_fantail_files[1]]]
+
+# Identify potentially relevant columns.
+
+acoustic_columns <- grep(
+  "detect|score|probab|confidence|presence|absence|call|acoustic|index|count|abundance",
+  names(grey_example),
+  ignore.case = TRUE,
+  value = TRUE
+)
+
+cat("\nPOTENTIAL ACOUSTIC ACTIVITY VARIABLES:\n\n")
+
+if (length(acoustic_columns) > 0) {
+  cat(paste(acoustic_columns, collapse = "\n"))
+} else {
+  cat("No obvious detection or acoustic measurement columns found.")
+}
+
+# Also show the final 15 column names, as measurement
+# fields may use terminology not captured above.
+
+cat("\n\nFINAL 15 DATASET COLUMNS:\n\n")
+
+cat(paste(tail(names(grey_example), 15), collapse = "\n"))
+
+```
+
+```{r}
+
+# ------------------------------------------------------------
+# Grey Fantail: seasonal vocal activity across five sites
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Does Grey Fantail vocal activity exhibit seasonal patterns?
+#
+# Are seasonal patterns consistent across Australian
+# monitoring sites with different environmental conditions?
+#
+# Vocal activity is measured as the percentage of recorded
+# 3-second windows containing at least one vocalisation.
+#
+# This is an index of acoustic activity, not bird abundance.
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Combine Grey Fantail datasets
+# ------------------------------------------------------------
+
+grey_activity <- bind_rows(
+  lapply(grey_fantail_files, function(file) {
+
+    data <- acoustic_data[[file]]
+
+    # Identify the recording date column.
+
+    date_column <- grep(
+      "date|timestamp|eventstart|recorded",
+      names(data),
+      ignore.case = TRUE,
+      value = TRUE
+    )[1]
+
+    dates <- as.Date(
+      parse_date_time(
+        as.character(data[[date_column]]),
+        orders = c("ymd HMS", "ymd HM", "ymd",
+                   "dmy HMS", "dmy HM", "dmy"),
+        quiet = TRUE
+      )
+    )
+
+    data.frame(
+      site = data$SiteName,
+      date = dates,
+      vocal_windows = as.numeric(
+        data[["number of 3-sec windows with ≥1 vocalisation"]]
+      ),
+      total_windows = as.numeric(
+        data[["total 3-sec windows recorded that day"]]
+      )
+    )
+  })
+) %>%
+  filter(
+    !is.na(date),
+    !is.na(vocal_windows),
+    !is.na(total_windows),
+    total_windows > 0
+  ) %>%
+  mutate(
+    month = month(date),
+    vocal_activity = 100 * vocal_windows / total_windows
+  )
+
+# ------------------------------------------------------------
+# 2. Calculate seasonal vocal activity
+# ------------------------------------------------------------
+
+# Sum detections and recording effort within each month.
+# This avoids giving low-effort days disproportionate weight.
+
+grey_seasonal <- grey_activity %>%
+  group_by(site, month) %>%
+  summarise(
+    vocal_windows = sum(vocal_windows),
+    total_windows = sum(total_windows),
+    vocal_activity = 100 * vocal_windows / total_windows,
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 3. Plot seasonal patterns across sites
+# ------------------------------------------------------------
+
+ggplot(
+  grey_seasonal,
+  aes(x = month, y = vocal_activity, colour = site, group = site)
+) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    title = "Grey Fantail: seasonal vocal activity",
+    subtitle = "Proportion of recorded 3-second windows with vocalisations",
+    x = "Month",
+    y = "Vocal activity (%)",
+    colour = "Monitoring site"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    legend.position = "bottom"
+  )
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Is Grey Fantail vocal activity seasonal?
+#
+# 2. Which months show the greatest vocal activity?
+#
+# 3. Are seasonal peaks consistent across monitoring sites?
+#
+# 4. Could differences reflect climate, breeding activity
+#    or other ecological factors?
+#
+# 5. Could temperature anomalies and precipitation help
+#    explain variation after accounting for season?
+
+```
+
+#check to see what environmental drivers may match vocal patterns of grey fantail
+
+```{r}
+
+
+# ------------------------------------------------------------
+# Tumbarumba: environmental data coverage, 2012–2019
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Which environmental measurements are available during
+# the Grey Fantail acoustic monitoring period?
+#
+# Examine air temperature, soil temperature, soil moisture
+# and precipitation before selecting explanatory variables.
+
+library(dplyr)
+
+# ------------------------------------------------------------
+# 1. Define the acoustic monitoring period
+# ------------------------------------------------------------
+
+tumba_start <- as.Date("2012-09-28")
+tumba_end <- as.Date("2019-12-10")
+
+# ------------------------------------------------------------
+# 2. Function to summarise environmental data coverage
+# ------------------------------------------------------------
+
+check_coverage <- function(data, measurement, label) {
+
+  # Identify records for Tumbarumba during the acoustic period.
+
+  site_data <- data %>%
+    filter(
+      grepl("Tumbarumba", site_name, ignore.case = TRUE),
+      as.Date(start_date_time) >= tumba_start,
+      as.Date(start_date_time) <= tumba_end,
+      !is.na(.data[[measurement]])
+    )
+
+  # Return a single summary row, including when no data
+  # are available, without producing Inf or -Inf dates.
+
+  data.frame(
+    variable = label,
+    first_record = if (nrow(site_data) > 0)
+      as.character(min(as.Date(site_data$start_date_time)))
+    else NA_character_,
+    last_record = if (nrow(site_data) > 0)
+      as.character(max(as.Date(site_data$start_date_time)))
+    else NA_character_,
+    observations = nrow(site_data),
+    days = n_distinct(as.Date(site_data$start_date_time))
+  )
+}
+
+# ------------------------------------------------------------
+# 3. Check all four environmental variables
+# ------------------------------------------------------------
+
+tumba_environment_coverage <- bind_rows(
+
+  check_coverage(
+    GERI_airtemperature_30min,
+    "mean_air_temp_degC",
+    "Air temperature"
+  ),
+
+  check_coverage(
+    GERI_soiltemperature_30min,
+    "mean_soil_temp_degC",
+    "Soil temperature"
+  ),
+
+  check_coverage(
+    GERI_soilmoisture_30min,
+    "mean_swc_percent",
+    "Soil moisture"
+  ),
+
+  check_coverage(
+    GERI_precipitation_60min,
+    "bulk_precipitation_mm",
+    "Precipitation"
+  )
+
+)
+
+# ------------------------------------------------------------
+# 4. Display the results
+# ------------------------------------------------------------
+
+print(tumba_environment_coverage, row.names = FALSE)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which environmental variables overlap with the
+#    Grey Fantail acoustic monitoring period?
+#
+# 2. Are any variables missing or poorly represented?
+#
+# 3. Which variables could help explain variation in
+#    seasonal Grey Fantail vocal activity?
+#
+# 4. Should temperature anomalies, soil moisture and
+#    precipitation be investigated together or separately?
+
+
+```
+
+##does tumba have precipiation
+
+```{r}
+
+# Identify the sites represented in the precipitation dataset.
+# Check whether Tumbarumba uses a different site name.
+
+GERI_precipitation_60min %>%
+  distinct(site_name) %>%
+  filter(grepl("Tumb|tum", site_name, ignore.case = TRUE)) %>%
+  print(n = Inf)
+
+```
+
+##grey fantail and tumba environ metrics combined
+
+```{r}
+
+# ------------------------------------------------------------
+# Tumbarumba: Grey Fantail activity and environmental conditions
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Is Grey Fantail vocal activity associated with temperature
+# anomalies at Tumbarumba?
+#
+# First combine acoustic activity with air temperature,
+# soil temperature and soil moisture.
+#
+# Use monthly summaries to investigate ecological patterns.
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# ------------------------------------------------------------
+# 1. Select Tumbarumba Grey Fantail acoustic records
+# ------------------------------------------------------------
+
+tumba_birds <- grey_activity %>%
+  filter(site == "Tumbarumba01") %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(month) %>%
+  summarise(
+    vocal_windows = sum(vocal_windows),
+    total_windows = sum(total_windows),
+    vocal_activity = 100 * vocal_windows / total_windows,
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 2. Calculate monthly environmental conditions
+# ------------------------------------------------------------
+
+monthly_environment <- function(data, measurement, output_name) {
+
+  data %>%
+    filter(
+      grepl("Tumbarumba", site_name, ignore.case = TRUE),
+      as.Date(start_date_time) >= tumba_start,
+      as.Date(start_date_time) <= tumba_end
+    ) %>%
+    mutate(month = floor_date(as.Date(start_date_time), "month")) %>%
+    group_by(month) %>%
+    summarise(
+      value = if (all(is.na(.data[[measurement]])))
+        NA_real_
+      else mean(.data[[measurement]], na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    rename(!!output_name := value)
+}
+
+tumba_air <- monthly_environment(
+  GERI_airtemperature_30min,
+  "mean_air_temp_degC",
+  "air_temperature"
+)
+
+tumba_soil_temp <- monthly_environment(
+  GERI_soiltemperature_30min,
+  "mean_soil_temp_degC",
+  "soil_temperature"
+)
+
+tumba_soil_moisture <- monthly_environment(
+  GERI_soilmoisture_30min,
+  "mean_swc_percent",
+  "soil_moisture"
+)
+
+# ------------------------------------------------------------
+# 3. Combine acoustic and environmental measurements
+# ------------------------------------------------------------
+
+tumba_combined <- tumba_birds %>%
+  left_join(tumba_air, by = "month") %>%
+  left_join(tumba_soil_temp, by = "month") %>%
+  left_join(tumba_soil_moisture, by = "month") %>%
+  mutate(calendar_month = month(month))
+
+# ------------------------------------------------------------
+# 4. Calculate temperature anomalies
+# ------------------------------------------------------------
+
+# Anomalies represent departures from the average
+# temperature for the same calendar month during 2012–2019.
+
+tumba_combined <- tumba_combined %>%
+  group_by(calendar_month) %>%
+  mutate(
+    air_anomaly = air_temperature -
+      mean(air_temperature, na.rm = TRUE),
+    soil_anomaly = soil_temperature -
+      mean(soil_temperature, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# ------------------------------------------------------------
+# 5. Plot vocal activity against air temperature anomalies
+# ------------------------------------------------------------
+
+ggplot(
+  tumba_combined,
+  aes(x = air_anomaly, y = vocal_activity)
+) +
+  geom_point(
+    colour = "steelblue",
+    size = 2,
+    alpha = 0.7
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    colour = "black"
+  ) +
+  labs(
+    title = "Tumbarumba: Grey Fantail vocal activity",
+    subtitle = "Relationship with monthly air temperature anomalies",
+    x = "Air temperature anomaly (°C)",
+    y = "Vocal activity (%)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black")
+  )
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Does vocal activity increase or decrease during
+#    warmer-than-average months?
+#
+# 2. Is the relationship approximately linear?
+#
+# 3. Could soil temperature or moisture show stronger
+#    relationships with vocal activity?
+#
+# 4. Does the relationship persist after accounting
+#    statistically for seasonality?
+
+```
+##model test of grey fantail at Tumba
+
+```{r}
+
+# ------------------------------------------------------------
+# Tumbarumba: modelling Grey Fantail vocal activity
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Does Grey Fantail vocal activity vary seasonally?
+#
+# Do air temperature, soil temperature and soil moisture
+# anomalies explain additional variation after accounting
+# for season?
+#
+# Response:
+# Number of 3-second windows containing vocalisations,
+# relative to the total number of recorded windows.
+#
+# Models:
+# 1. Season only
+# 2. Season + environmental anomalies
+#
+# These are exploratory associations, not causal tests.
+
+library(dplyr)
+
+# ------------------------------------------------------------
+# 1. Prepare the modelling dataset
+# ------------------------------------------------------------
+
+# Calculate soil moisture anomalies relative to the
+# average for each calendar month during 2012–2019.
+
+tumba_model_data <- tumba_combined %>%
+  group_by(calendar_month) %>%
+  mutate(
+    moisture_anomaly = soil_moisture -
+      mean(soil_moisture, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    season = factor(
+      case_when(
+        calendar_month %in% c(12, 1, 2) ~ "Summer",
+        calendar_month %in% c(3, 4, 5) ~ "Autumn",
+        calendar_month %in% c(6, 7, 8) ~ "Winter",
+        TRUE ~ "Spring"
+      ),
+      levels = c("Winter", "Spring", "Summer", "Autumn")
+    ),
+    non_vocal_windows = total_windows - vocal_windows
+  ) %>%
+  filter(
+    complete.cases(
+      air_anomaly,
+      soil_anomaly,
+      moisture_anomaly,
+      season
+    ),
+    total_windows > 0,
+    vocal_windows >= 0,
+    non_vocal_windows >= 0
+  )
+
+# ------------------------------------------------------------
+# 2. Fit the season-only model
+# ------------------------------------------------------------
+
+model_season <- glm(
+  cbind(vocal_windows, non_vocal_windows) ~ season,
+  family = quasibinomial(link = "logit"),
+  data = tumba_model_data
+)
+
+# ------------------------------------------------------------
+# 3. Fit the season + environment model
+# ------------------------------------------------------------
+
+model_environment <- glm(
+  cbind(vocal_windows, non_vocal_windows) ~
+    season +
+    air_anomaly +
+    soil_anomaly +
+    moisture_anomaly,
+  family = quasibinomial(link = "logit"),
+  data = tumba_model_data
+)
+
+# ------------------------------------------------------------
+# 4. Compare the two models
+# ------------------------------------------------------------
+
+cat("\nMODEL COMPARISON\n\n")
+
+print(
+  anova(
+    model_season,
+    model_environment,
+    test = "F"
+  )
+)
+
+# ------------------------------------------------------------
+# 5. Examine the full model
+# ------------------------------------------------------------
+
+cat("\nFULL MODEL RESULTS\n\n")
+
+print(summary(model_environment))
+
+# ------------------------------------------------------------
+# 6. Check overdispersion
+# ------------------------------------------------------------
+
+cat("\nDISPERSION ESTIMATE\n\n")
+
+print(summary(model_environment)$dispersion)
+
+# ------------------------------------------------------------
+# 7. Check correlations between environmental predictors
+# ------------------------------------------------------------
+
+cat("\nENVIRONMENTAL PREDICTOR CORRELATIONS\n\n")
+
+print(
+  round(
+    cor(
+      tumba_model_data %>%
+        select(
+          air_anomaly,
+          soil_anomaly,
+          moisture_anomaly
+        )
+    ),
+    2
+  )
+)
+
+# ------------------------------------------------------------
+# 8. Report the sample size
+# ------------------------------------------------------------
+
+cat("\nNUMBER OF MONTHS INCLUDED:\n")
+print(nrow(tumba_model_data))
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Does the environmental model improve upon the
+#    season-only model?
+#
+# 2. Which environmental predictors have statistically
+#    supported associations with vocal activity?
+#
+# 3. Are the environmental predictors strongly correlated?
+#
+# 4. Is there substantial overdispersion?
+#
+# 5. Could temporal autocorrelation or differences in
+#    recording schedules influence the results?
+
+```
+
+```{r}
+
+# ------------------------------------------------------------
+# Tumbarumba: Grey Fantail model diagnostics and coefficients
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# How well does the environmental model fit the acoustic data?
+#
+# Are environmental predictors strongly correlated?
+#
+# Which predictors show positive or negative associations
+# with Grey Fantail vocal activity?
+#
+# Model coefficients are on the log-odds scale.
+# Confidence intervals are exploratory given the
+# substantial overdispersion observed in the model.
+
+library(dplyr)
+library(ggplot2)
+
+# ------------------------------------------------------------
+# 1. Correlations between environmental predictors
+# ------------------------------------------------------------
+
+cat("\nENVIRONMENTAL PREDICTOR CORRELATIONS\n\n")
+
+predictor_correlations <- cor(
+  tumba_model_data %>%
+    select(air_anomaly, soil_anomaly, moisture_anomaly),
+  use = "complete.obs"
+)
+
+print(round(predictor_correlations, 2))
+
+# ------------------------------------------------------------
+# 2. Model fit statistics
+# ------------------------------------------------------------
+
+cat("\nMODEL FIT\n\n")
+
+model_fit <- data.frame(
+  model = c("Season only", "Season + environment"),
+  residual_deviance = c(
+    deviance(model_season),
+    deviance(model_environment)
+  ),
+  residual_df = c(
+    df.residual(model_season),
+    df.residual(model_environment)
+  ),
+  dispersion = c(
+    summary(model_season)$dispersion,
+    summary(model_environment)$dispersion
+  )
+)
+
+print(model_fit, row.names = FALSE)
+
+# ------------------------------------------------------------
+# 3. Residual diagnostics
+# ------------------------------------------------------------
+
+# Examine whether residuals show systematic patterns.
+# Large residuals or structure may indicate poor fit.
+
+diagnostic_data <- data.frame(
+  month = tumba_model_data$month,
+  fitted_activity = 100 * fitted(model_environment),
+  residual = residuals(model_environment, type = "pearson")
+)
+
+p_residuals <- ggplot(
+  diagnostic_data,
+  aes(x = fitted_activity, y = residual)
+) +
+  geom_point(colour = "steelblue", size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Model diagnostics: residuals versus fitted values",
+    x = "Fitted vocal activity (%)",
+    y = "Pearson residual"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black")
+  )
+
+print(p_residuals)
+
+# ------------------------------------------------------------
+# 4. Check residuals through time
+# ------------------------------------------------------------
+
+p_time <- ggplot(
+  diagnostic_data,
+  aes(x = month, y = residual)
+) +
+  geom_point(colour = "steelblue", size = 2) +
+  geom_line(colour = "steelblue", linewidth = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Model diagnostics: residuals through time",
+    x = "Date",
+    y = "Pearson residual"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black")
+  )
+
+print(p_time)
+
+# ------------------------------------------------------------
+# 5. Extract model coefficients and confidence intervals
+# ------------------------------------------------------------
+
+coefficient_table <- as.data.frame(
+  summary(model_environment)$coefficients
+)
+
+coefficient_table$term <- rownames(coefficient_table)
+
+names(coefficient_table)[1:4] <- c(
+  "estimate", "std_error", "statistic", "p_value"
+)
+
+# Calculate approximate 95% confidence intervals
+# using the quasibinomial model's t distribution.
+
+critical_value <- qt(
+  0.975,
+  df = df.residual(model_environment)
+)
+
+coefficient_table <- coefficient_table %>%
+  mutate(
+    lower = estimate - critical_value * std_error,
+    upper = estimate + critical_value * std_error
+  ) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    predictor = recode(
+      term,
+      "seasonSpring" = "Spring vs winter",
+      "seasonSummer" = "Summer vs winter",
+      "seasonAutumn" = "Autumn vs winter",
+      "air_anomaly" = "Air temperature anomaly (°C)",
+      "soil_anomaly" = "Soil temperature anomaly (°C)",
+      "moisture_anomaly" = "Soil moisture anomaly (%)"
+    )
+  )
+
+# ------------------------------------------------------------
+# 6. Coefficient plot
+# ------------------------------------------------------------
+
+p_coefficients <- ggplot(
+  coefficient_table,
+  aes(
+    x = estimate,
+    y = reorder(predictor, estimate)
+  )
+) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_errorbarh(
+    aes(xmin = lower, xmax = upper),
+    height = 0.2,
+    colour = "black"
+  ) +
+  geom_point(
+    size = 3,
+    colour = "steelblue"
+  ) +
+  labs(
+    title = "Grey Fantail: seasonal and environmental associations",
+    subtitle = "Quasibinomial model, approximate 95% confidence intervals",
+    x = "Model coefficient (log-odds)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_coefficients)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Do the residuals show systematic patterns?
+#
+# 2. Is there evidence of temporal dependence?
+#
+# 3. Does the model show substantial overdispersion?
+#
+# 4. Which coefficient confidence intervals exclude zero?
+#
+# 5. Are the results robust enough for ecological inference?
+
+```
+
+## check previous model
+
+```{r}
+
+# ------------------------------------------------------------
+# Grey Fantail: monthly activity distribution by season
+# ------------------------------------------------------------
+
+# Check how many months have zero vocal activity.
+# Examine the distribution of monthly activity by season.
+
+tumba_model_data %>%
+  group_by(season) %>%
+  summarise(
+    months = n(),
+    zero_activity_months = sum(vocal_windows == 0),
+    median_activity = median(
+      100 * vocal_windows / total_windows
+    ),
+    mean_activity = mean(
+      100 * vocal_windows / total_windows
+    ),
+    maximum_activity = max(
+      100 * vocal_windows / total_windows
+    ),
+    .groups = "drop"
+  ) %>%
+  print(width = Inf)
+
+```
+
+####
+
+```{r}
+
+# ============================================================
+# Tumbarumba: Grey Fantail vocal activity and environment
+# Beta regression analysis
+# ============================================================
+
+# Scientific investigation
+#
+# Does Grey Fantail vocal activity vary with season?
+#
+# Do air temperature anomalies, soil temperature anomalies
+# and soil moisture anomalies explain additional variation
+# after accounting for season?
+#
+# Beta regression treats each monthly vocal activity
+# proportion as an observation, rather than treating
+# every 3-second acoustic window as independent.
+#
+# The analysis is exploratory and does not establish
+# causal relationships.
+
+# ------------------------------------------------------------
+# 1. Load packages
+# ------------------------------------------------------------
+
+library(dplyr)
+library(ggplot2)
+
+if (!requireNamespace("betareg", quietly = TRUE)) {
+  install.packages("betareg")
+}
+
+library(betareg)
+
+# ------------------------------------------------------------
+# 2. Prepare monthly vocal activity proportions
+# ------------------------------------------------------------
+
+tumba_beta_data <- tumba_model_data %>%
+  mutate(
+    vocal_proportion = vocal_windows / total_windows
+  ) %>%
+  filter(
+    is.finite(vocal_proportion),
+    vocal_proportion > 0,
+    vocal_proportion < 1,
+    complete.cases(
+      season,
+      air_anomaly,
+      soil_anomaly,
+      moisture_anomaly
+    )
+  ) %>%
+  arrange(month)
+
+cat("\nNUMBER OF MONTHS INCLUDED:\n")
+print(nrow(tumba_beta_data))
+
+# ------------------------------------------------------------
+# 3. Fit season-only model
+# ------------------------------------------------------------
+
+beta_season <- betareg(
+  vocal_proportion ~ season,
+  data = tumba_beta_data,
+  link = "logit"
+)
+
+# ------------------------------------------------------------
+# 4. Fit season + environment model
+# ------------------------------------------------------------
+
+beta_environment <- betareg(
+  vocal_proportion ~
+    season +
+    air_anomaly +
+    soil_anomaly +
+    moisture_anomaly,
+  data = tumba_beta_data,
+  link = "logit"
+)
+
+# ------------------------------------------------------------
+# 5. Compare the two models
+# ------------------------------------------------------------
+
+# Likelihood-ratio test for nested beta regression models.
+
+loglik_season <- logLik(beta_season)
+loglik_environment <- logLik(beta_environment)
+
+lr_statistic <- 2 * (
+  as.numeric(loglik_environment) -
+    as.numeric(loglik_season)
+)
+
+df_difference <- attr(loglik_environment, "df") -
+  attr(loglik_season, "df")
+
+p_value <- pchisq(
+  lr_statistic,
+  df = df_difference,
+  lower.tail = FALSE
+)
+
+cat("\nMODEL COMPARISON\n\n")
+
+print(
+  data.frame(
+    likelihood_ratio = lr_statistic,
+    degrees_of_freedom = df_difference,
+    p_value = p_value
+  ),
+  row.names = FALSE
+)
+
+# ------------------------------------------------------------
+# 6. Model fit statistics
+# ------------------------------------------------------------
+
+cat("\nMODEL FIT STATISTICS\n\n")
+
+model_fit <- data.frame(
+  model = c("Season only", "Season + environment"),
+  AIC = c(
+    AIC(beta_season),
+    AIC(beta_environment)
+  ),
+  BIC = c(
+    BIC(beta_season),
+    BIC(beta_environment)
+  ),
+  pseudo_R2 = c(
+    summary(beta_season)$pseudo.r.squared,
+    summary(beta_environment)$pseudo.r.squared
+  )
+)
+
+print(model_fit, row.names = FALSE)
+
+# ------------------------------------------------------------
+# 7. Full model results
+# ------------------------------------------------------------
+
+cat("\nBETA REGRESSION RESULTS\n\n")
+
+print(summary(beta_environment))
+
+# ------------------------------------------------------------
+# 8. Environmental predictor correlations
+# ------------------------------------------------------------
+
+cat("\nENVIRONMENTAL PREDICTOR CORRELATIONS\n\n")
+
+print(
+  round(
+    cor(
+      tumba_beta_data %>%
+        select(
+          air_anomaly,
+          soil_anomaly,
+          moisture_anomaly
+        )
+    ),
+    2
+  )
+)
+
+# ------------------------------------------------------------
+# 9. Residual diagnostics
+# ------------------------------------------------------------
+
+# Standardised weighted residuals help identify observations
+# that are poorly predicted by the model.
+
+diagnostic_data <- data.frame(
+  month = tumba_beta_data$month,
+  fitted_activity = 100 * fitted(beta_environment),
+  residual = as.numeric(
+    residuals(beta_environment, type = "sweighted2")
+  )
+)
+
+p_residuals <- ggplot(
+  diagnostic_data,
+  aes(x = fitted_activity, y = residual)
+) +
+  geom_point(colour = "steelblue", size = 2) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  labs(
+    title = "Beta regression: residuals versus fitted values",
+    x = "Fitted vocal activity (%)",
+    y = "Standardised weighted residual"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black")
+  )
+
+print(p_residuals)
+
+# ------------------------------------------------------------
+# 10. Residuals through time
+# ------------------------------------------------------------
+
+p_time <- ggplot(
+  diagnostic_data,
+  aes(x = month, y = residual)
+) +
+  geom_line(colour = "steelblue", linewidth = 0.5) +
+  geom_point(colour = "steelblue", size = 1.5) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed"
+  ) +
+  labs(
+    title = "Beta regression: residuals through time",
+    x = "Date",
+    y = "Standardised weighted residual"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black")
+  )
+
+print(p_time)
+
+# ------------------------------------------------------------
+# 11. Extract mean-model coefficients
+# ------------------------------------------------------------
+
+# Coefficients are on the logit scale.
+# Confidence intervals use the model's standard errors.
+
+coefficient_table <- as.data.frame(
+  summary(beta_environment)$coefficients$mean
+)
+
+coefficient_table$term <- rownames(coefficient_table)
+
+names(coefficient_table)[1:4] <- c(
+  "estimate",
+  "std_error",
+  "statistic",
+  "p_value"
+)
+
+coefficient_table <- coefficient_table %>%
+  mutate(
+    lower = estimate - 1.96 * std_error,
+    upper = estimate + 1.96 * std_error
+  ) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    predictor = recode(
+      term,
+      "seasonSpring" = "Spring vs winter",
+      "seasonSummer" = "Summer vs winter",
+      "seasonAutumn" = "Autumn vs winter",
+      "air_anomaly" = "Air temperature anomaly (°C)",
+      "soil_anomaly" = "Soil temperature anomaly (°C)",
+      "moisture_anomaly" = "Soil moisture anomaly (%)"
+    )
+  )
+
+cat("\nCOEFFICIENT ESTIMATES\n\n")
+
+print(
+  coefficient_table %>%
+    select(
+      predictor,
+      estimate,
+      lower,
+      upper,
+      p_value
+    ),
+  row.names = FALSE
+)
+
+# ------------------------------------------------------------
+# 12. Coefficient plot
+# ------------------------------------------------------------
+
+p_coefficients <- ggplot(
+  coefficient_table,
+  aes(
+    x = estimate,
+    y = reorder(predictor, estimate)
+  )
+) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_errorbar(
+    aes(xmin = lower, xmax = upper),
+    orientation = "y",
+    width = 0.2,
+    colour = "black"
+  ) +
+  geom_point(
+    size = 3,
+    colour = "steelblue"
+  ) +
+  labs(
+    title = "Grey Fantail: seasonal and environmental associations",
+    subtitle = "Beta regression with approximate 95% confidence intervals",
+    x = "Model coefficient (log-odds)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_coefficients)
+
+# ------------------------------------------------------------
+# 13. Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Does adding environmental variables improve model fit
+#    beyond season alone?
+#
+# 2. Which model has the lower AIC?
+#
+# 3. Is soil temperature positively associated with
+#    Grey Fantail vocal activity in the beta regression?
+#
+# 4. Do residuals show systematic patterns or outliers?
+#
+# 5. Is there evidence of temporal autocorrelation?
+#
+# 6. Are the coefficient confidence intervals narrower
+#    than those from the quasibinomial model?
+#
+# IMPORTANT:
+# Beta regression avoids treating every acoustic window
+# as an independent binomial trial, but it does not
+# automatically account for temporal autocorrelation,
+# variation in recording effort or other dependencies.
+#
+# Interpret statistical associations cautiously.
+
+
+
+```
+#### grey fantail temproal autocorrelation
+
+```{r}
+
+# ------------------------------------------------------------
+# Grey Fantail: temporal autocorrelation diagnostics
+# ------------------------------------------------------------
+
+# Scientific investigation
+#
+# Are consecutive monthly observations independent?
+#
+# Temporal autocorrelation could affect the reliability
+# of coefficient standard errors and significance tests.
+
+# Extract standardised weighted residuals in date order.
+
+beta_residuals <- residuals(
+  beta_environment,
+  type = "sweighted2"
+)
+
+# Display the autocorrelation function.
+
+acf(
+  beta_residuals,
+  lag.max = 18,
+  main = "Grey Fantail: residual temporal autocorrelation"
+)
+
+# Calculate lag-1 residual autocorrelation.
+
+cat("\nLAG-1 RESIDUAL AUTOCORRELATION:\n")
+
+print(
+  cor(
+    head(beta_residuals, -1),
+    tail(beta_residuals, -1)
+  )
+)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Are any autocorrelation bars outside the dashed
+#    confidence limits?
+#
+# 2. Is lag-1 autocorrelation substantial?
+#
+# 3. Could temporal dependence affect model inference?
+#
+# Note: This check assumes consecutive observations are
+# equally spaced. Missing months would need to be considered.
+
+```
+
+#screen all bird species for seasonal pattern at tumbarumba
+
+```{r}
+
+# ============================================================
+# Tumbarumba: seasonal vocal activity across bird species
+# ============================================================
+
+# Scientific investigation
+#
+# Which bird species exhibit the strongest seasonal patterns
+# in vocal activity at Tumbarumba?
+#
+# Do different species peak at different times of year?
+#
+# Can we identify promising species for further modelling?
+#
+# Vocal activity is the proportion of recorded 3-second
+# windows containing at least one vocalisation.
+#
+# This measures acoustic activity, not bird abundance.
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+
+# ------------------------------------------------------------
+# 1. Identify Tumbarumba species datasets
+# ------------------------------------------------------------
+
+# Select files associated with Tumbarumba, using their
+# filename or the SiteName field.
+
+tumba_species_files <- names(acoustic_data)[
+  sapply(names(acoustic_data), function(file) {
+    data <- acoustic_data[[file]]
+
+    grepl("Tumbarumba", file, ignore.case = TRUE) ||
+      ("SiteName" %in% names(data) &&
+         any(grepl("Tumbarumba", data$SiteName,
+                   ignore.case = TRUE), na.rm = TRUE))
+  })
+]
+
+cat("\nTumbarumba species datasets:",
+    length(tumba_species_files), "\n")
+
+# ------------------------------------------------------------
+# 2. Combine species acoustic records
+# ------------------------------------------------------------
+
+tumba_all_birds <- bind_rows(
+  lapply(tumba_species_files, function(file) {
+
+    data <- acoustic_data[[file]]
+
+    # Identify the recording date column.
+
+    date_column <- grep(
+      "date|timestamp|eventstart|recorded",
+      names(data),
+      ignore.case = TRUE,
+      value = TRUE
+    )[1]
+
+    # Use the scientific name supplied in the dataset.
+
+    dates <- as.Date(
+      parse_date_time(
+        as.character(data[[date_column]]),
+        orders = c(
+          "ymd HMS", "ymd HM", "ymd",
+          "dmy HMS", "dmy HM", "dmy"
+        ),
+        quiet = TRUE
+      )
+    )
+
+    data.frame(
+      species = data$ScientificName,
+      site = data$SiteName,
+      date = dates,
+      vocal_windows = as.numeric(
+        data[["number of 3-sec windows with ≥1 vocalisation"]]
+      ),
+      total_windows = as.numeric(
+        data[["total 3-sec windows recorded that day"]]
+      )
+    )
+  })
+) %>%
+  filter(
+    grepl("Tumbarumba", site, ignore.case = TRUE),
+    !is.na(date),
+    !is.na(species),
+    !is.na(vocal_windows),
+    !is.na(total_windows),
+    total_windows > 0,
+    vocal_windows >= 0,
+    vocal_windows <= total_windows
+  ) %>%
+  mutate(calendar_month = month(date))
+
+# ------------------------------------------------------------
+# 3. Calculate monthly vocal activity for each species
+# ------------------------------------------------------------
+
+# Pool observations from the same calendar month
+# across all available years.
+#
+# Sum vocalisation-positive windows and total windows
+# before calculating activity, so recording effort is
+# accounted for.
+
+tumba_species_seasonal <- tumba_all_birds %>%
+  group_by(species, calendar_month) %>%
+  summarise(
+    vocal_windows = sum(vocal_windows),
+    total_windows = sum(total_windows),
+    vocal_activity = 100 * vocal_windows / total_windows,
+    days_sampled = n_distinct(date),
+    .groups = "drop"
+  )
+
+# ------------------------------------------------------------
+# 4. Standardise activity within each species
+# ------------------------------------------------------------
+
+# Z-scores show whether a month has higher or lower
+# activity than that species' own annual monthly mean.
+#
+# This makes seasonal patterns comparable across species
+# with very different overall vocal activity levels.
+
+tumba_species_seasonal <- tumba_species_seasonal %>%
+  group_by(species) %>%
+  mutate(
+    seasonal_sd = sd(vocal_activity),
+    standardised_activity = if_else(
+      !is.na(seasonal_sd) & seasonal_sd > 0,
+      (vocal_activity - mean(vocal_activity)) / seasonal_sd,
+      0
+    )
+  ) %>%
+  ungroup()
+
+# ------------------------------------------------------------
+# 5. Plot seasonal vocal activity heatmap
+# ------------------------------------------------------------
+
+p_heatmap <- ggplot(
+  tumba_species_seasonal,
+  aes(
+    x = calendar_month,
+    y = species,
+    fill = standardised_activity
+  )
+) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb,
+    expand = c(0, 0)
+  ) +
+  scale_fill_gradient2(
+    low = "steelblue",
+    mid = "white",
+    high = "firebrick",
+    midpoint = 0,
+    name = "Relative\nactivity"
+  ) +
+  labs(
+    title = "Seasonal bird vocal activity at Tumbarumba",
+    subtitle = "Monthly activity standardised within each species",
+    x = "Month",
+    y = "Species"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    panel.grid = element_blank()
+  )
+
+print(p_heatmap)
+
+# ------------------------------------------------------------
+# 6. Rank species by seasonal variation
+# ------------------------------------------------------------
+
+# Calculate the difference between maximum and minimum
+# monthly vocal activity.
+#
+# This is a descriptive screening measure, not a formal
+# statistical test of seasonality.
+
+tumba_seasonal_ranking <- tumba_species_seasonal %>%
+  group_by(species) %>%
+  summarise(
+    months = n(),
+    peak_month = month.abb[
+      calendar_month[which.max(vocal_activity)]
+    ],
+    minimum_activity = min(vocal_activity),
+    maximum_activity = max(vocal_activity),
+    seasonal_range = maximum_activity - minimum_activity,
+    .groups = "drop"
+  ) %>%
+  arrange(desc(seasonal_range))
+
+cat("\nSPECIES RANKED BY SEASONAL VARIATION\n\n")
+
+print(
+  tumba_seasonal_ranking,
+  n = Inf,
+  width = Inf
+)
+
+# ------------------------------------------------------------
+# Questions for interpretation
+# ------------------------------------------------------------
+
+# 1. Which species exhibit pronounced seasonal peaks?
+#
+# 2. Do species differ in their peak vocal activity month?
+#
+# 3. Are spring and summer peaks common across species?
+#
+# 4. Which species show relatively little seasonal variation?
+#
+# 5. Which species would be most interesting for modelling
+#    relationships with environmental anomalies?
+#
+# IMPORTANT:
+# The heatmap shows relative seasonal patterns.
+# The ranking uses absolute percentage-point differences,
+# so highly vocal species may rank above quieter species.
+#
+# We must also check temporal coverage and recording
+# effort before selecting species for statistical models.
+
+```
+
+
+```{r}
+
+# ============================================================
+# Tumbarumba: common names and seasonal overlap between birds
+# ============================================================
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# ------------------------------------------------------------
+# 1. Add common names to the species ranking
+# ------------------------------------------------------------
+
+bird_names <- data.frame(
+  species = c(
+    "Eopsaltria australis",
+    "Colluricincla harmonica",
+    "Rhipidura albiscapa",
+    "Pachycephala pectoralis",
+    "Caligavis chrysops",
+    "Strepera graculina",
+    "Cormobates leucophaea",
+    "Acanthiza pusilla",
+    "Callocephalon fimbriatum",
+    "Acanthiza lineata",
+    "Dacelo novaeguineae",
+    "Zosterops lateralis",
+    "Ninox boobook",
+    "Coracina novaehollandiae"
+  ),
+  common_name = c(
+    "Eastern Yellow Robin",
+    "Grey Shrikethrush",
+    "Grey Fantail",
+    "Golden Whistler",
+    "Yellow-faced Honeyeater",
+    "Pied Currawong",
+    "White-throated Treecreeper",
+    "Brown Thornbill",
+    "Gang-gang Cockatoo",
+    "Striated Thornbill",
+    "Laughing Kookaburra",
+    "Silvereye",
+    "Southern Boobook",
+    "Black-faced Cuckooshrike"
+  )
+)
+
+tumba_seasonal_ranking_named <- tumba_seasonal_ranking %>%
+  left_join(bird_names, by = "species") %>%
+  select(
+    common_name, species, months, peak_month,
+    minimum_activity, maximum_activity, seasonal_range
+  )
+
+cat("\nSEASONAL RANKING WITH COMMON NAMES\n\n")
+
+print(tumba_seasonal_ranking_named, n = Inf, width = Inf)
+
+# ------------------------------------------------------------
+# 2. Calculate seasonal correlation between species
+# ------------------------------------------------------------
+
+# Each species has 12 monthly vocal activity values.
+# Pearson correlation measures similarity in their
+# seasonal patterns, not similarity in overall activity.
+
+seasonal_wide <- tumba_species_seasonal %>%
+  select(species, calendar_month, vocal_activity) %>%
+  pivot_wider(
+    names_from = species,
+    values_from = vocal_activity
+  ) %>%
+  arrange(calendar_month)
+
+seasonal_correlations <- cor(
+  seasonal_wide %>% select(-calendar_month),
+  use = "pairwise.complete.obs",
+  method = "pearson"
+)
+
+# ------------------------------------------------------------
+# 3. Display a seasonal similarity heatmap
+# ------------------------------------------------------------
+
+correlation_plot_data <- as.data.frame(
+  as.table(seasonal_correlations)
+) %>%
+  rename(
+    species_1 = Var1,
+    species_2 = Var2,
+    correlation = Freq
+  ) %>%
+  left_join(
+    bird_names,
+    by = c("species_1" = "species")
+  ) %>%
+  rename(bird_1 = common_name) %>%
+  left_join(
+    bird_names,
+    by = c("species_2" = "species")
+  ) %>%
+  rename(bird_2 = common_name)
+
+p_overlap <- ggplot(
+  correlation_plot_data,
+  aes(x = bird_1, y = bird_2, fill = correlation)
+) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  coord_equal() +
+  scale_fill_gradient2(
+    low = "steelblue",
+    mid = "white",
+    high = "firebrick",
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Seasonal\ncorrelation"
+  ) +
+  labs(
+    title = "Similarity in seasonal bird vocal activity",
+    subtitle = "Pearson correlations across 12 calendar months",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(
+      angle = 45, hjust = 1, colour = "black"
+    ),
+    axis.text.y = element_text(colour = "black"),
+    panel.grid = element_blank()
+  )
+
+print(p_overlap)
+
+# ------------------------------------------------------------
+# 4. Identify the most similar and contrasting species pairs
+# ------------------------------------------------------------
+
+species_pairs <- correlation_plot_data %>%
+  filter(as.character(species_1) < as.character(species_2)) %>%
+  select(bird_1, bird_2, correlation) %>%
+  arrange(desc(correlation))
+
+cat("\nMOST SIMILAR SEASONAL PATTERNS\n\n")
+print(head(species_pairs, 10))
+
+cat("\nMOST CONTRASTING SEASONAL PATTERNS\n\n")
+print(tail(species_pairs, 10) %>% arrange(correlation))
+
+# ------------------------------------------------------------
+# 5. Compare overlap in the three highest-activity months
+# ------------------------------------------------------------
+
+top_months <- tumba_species_seasonal %>%
+  group_by(species) %>%
+  slice_max(
+    order_by = vocal_activity,
+    n = 3,
+    with_ties = FALSE
+  ) %>%
+  ungroup() %>%
+  left_join(bird_names, by = "species") %>%
+  arrange(common_name, desc(vocal_activity))
+
+top_month_overlap <- top_months %>%
+  select(species, calendar_month) %>%
+  inner_join(
+    top_months %>%
+      select(species, calendar_month),
+    by = "calendar_month",
+    suffix = c("_1", "_2")
+  ) %>%
+  filter(species_1 < species_2) %>%
+  count(species_1, species_2, name = "shared_peak_months") %>%
+  right_join(
+    expand_grid(
+      species_1 = unique(top_months$species),
+      species_2 = unique(top_months$species)
+    ) %>%
+      filter(species_1 < species_2),
+    by = c("species_1", "species_2")
+  ) %>%
+  mutate(shared_peak_months = replace_na(shared_peak_months, 0L)) %>%
+  left_join(bird_names, by = c("species_1" = "species")) %>%
+  rename(bird_1 = common_name) %>%
+  left_join(bird_names, by = c("species_2" = "species")) %>%
+  rename(bird_2 = common_name) %>%
+  select(bird_1, bird_2, shared_peak_months) %>%
+  arrange(desc(shared_peak_months), bird_1, bird_2)
+
+cat("\nSPECIES PAIRS SHARING ALL THREE PEAK MONTHS\n\n")
+
+print(
+  top_month_overlap %>%
+    filter(shared_peak_months == 3),
+  n = Inf
+)
+
+# ------------------------------------------------------------
+# Interpretation
+# ------------------------------------------------------------
+
+# Correlation close to +1:
+# Species have similar annual patterns of vocal activity.
+#
+# Correlation close to -1:
+# Species tend to be most vocal at different times of year.
+#
+# Three shared peak months:
+# Species have the same three highest-activity months,
+# although their order and magnitude may differ.
+#
+# These are descriptive comparisons, not statistical tests.
+# They do not establish shared ecological drivers.
+#
+# Monthly profiles pool observations across years.
+# We should verify comparable recording coverage before
+# interpreting species differences biologically.
+
+```
+
+
+```{r}
+
+# ============================================================
+# Tumbarumba: shared vocal activity across seven bird species
+# ============================================================
+
+# Research question:
+# Do seven species with strongly correlated annual seasonal
+# profiles also vary together between individual months
+# and years?
+#
+# We first remove each species' usual calendar-month
+# pattern, then compare the remaining variation.
+
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+
+# ------------------------------------------------------------
+# 1. Select all seven species
+# ------------------------------------------------------------
+
+selected_birds <- c(
+  "Colluricincla harmonica",
+  "Cormobates leucophaea",
+  "Pachycephala pectoralis",
+  "Caligavis chrysops",
+  "Rhipidura albiscapa",
+  "Ninox boobook",
+  "Eopsaltria australis"
+)
+
+bird_labels <- c(
+  "Colluricincla harmonica" = "Grey Shrikethrush",
+  "Cormobates leucophaea" = "White-throated Treecreeper",
+  "Pachycephala pectoralis" = "Golden Whistler",
+  "Caligavis chrysops" = "Yellow-faced Honeyeater",
+  "Rhipidura albiscapa" = "Grey Fantail",
+  "Ninox boobook" = "Southern Boobook",
+  "Eopsaltria australis" = "Eastern Yellow Robin"
+)
+
+# ------------------------------------------------------------
+# 2. Calculate monthly vocal activity
+# ------------------------------------------------------------
+
+bird_monthly <- tumba_all_birds %>%
+  filter(species %in% selected_birds) %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(species, month) %>%
+  summarise(
+    vocal_windows = sum(vocal_windows),
+    total_windows = sum(total_windows),
+    recording_days = n_distinct(date),
+    vocal_activity = 100 * vocal_windows / total_windows,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    common_name = unname(bird_labels[species]),
+    calendar_month = lubridate::month(month)
+  )
+
+# ------------------------------------------------------------
+# 3. Check recording coverage
+# ------------------------------------------------------------
+
+coverage_summary <- bird_monthly %>%
+  group_by(common_name) %>%
+  summarise(
+    first_month = min(month),
+    last_month = max(month),
+    months_recorded = n(),
+    recording_days = sum(recording_days),
+    .groups = "drop"
+  )
+
+cat("\nRECORDING COVERAGE\n\n")
+print(coverage_summary, n = Inf, width = Inf)
+
+# ------------------------------------------------------------
+# 4. Retain months shared by all seven species
+# ------------------------------------------------------------
+
+shared_months <- bird_monthly %>%
+  count(month, name = "species_recorded") %>%
+  filter(species_recorded == length(selected_birds)) %>%
+  pull(month)
+
+bird_shared <- bird_monthly %>%
+  filter(month %in% shared_months) %>%
+  arrange(species, month)
+
+cat("\nMONTHS SHARED BY ALL SEVEN SPECIES:",
+    length(shared_months), "\n")
+
+if (length(shared_months) > 0) {
+  cat("First shared month:",
+      as.character(min(shared_months)), "\n")
+  cat("Last shared month:",
+      as.character(max(shared_months)), "\n")
+
+  complete_months <- seq(
+    min(shared_months),
+    max(shared_months),
+    by = "month"
+  )
+
+  missing_months <- setdiff(complete_months, shared_months)
+
+  cat("Missing calendar months within shared period:",
+      length(missing_months), "\n")
+
+  if (length(missing_months) > 0) {
+    print(as.Date(missing_months))
+  }
+}
+
+# ------------------------------------------------------------
+# 5. Calculate species-specific seasonal anomalies
+# ------------------------------------------------------------
+
+# For each species, subtract its mean activity for
+# the corresponding calendar month across shared years.
+#
+# Example:
+# November 2016 activity minus that species' average
+# November activity.
+#
+# Positive = more vocal than usual for that month.
+# Negative = less vocal than usual for that month.
+
+bird_anomalies <- bird_shared %>%
+  group_by(species, calendar_month) %>%
+  mutate(
+    monthly_baseline = mean(vocal_activity),
+    activity_anomaly = vocal_activity - monthly_baseline
+  ) %>%
+  ungroup()
+
+# ------------------------------------------------------------
+# 6. Plot year-to-year vocal activity anomalies
+# ------------------------------------------------------------
+
+p_bird_anomalies <- ggplot(
+  bird_anomalies,
+  aes(x = month, y = activity_anomaly)
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_line(colour = "steelblue", linewidth = 0.6) +
+  geom_point(colour = "steelblue", size = 1.1) +
+  facet_wrap(
+    ~ common_name,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  labs(
+    title = "Interannual variation in bird vocal activity",
+    subtitle = "Anomalies relative to each species' usual calendar-month activity",
+    x = "Year",
+    y = "Vocal activity anomaly (percentage points)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    strip.text = element_text(colour = "black")
+  )
+
+print(p_bird_anomalies)
+
+# ------------------------------------------------------------
+# 7. Correlate anomalies between species
+# ------------------------------------------------------------
+
+anomaly_wide <- bird_anomalies %>%
+  select(month, common_name, activity_anomaly) %>%
+  pivot_wider(
+    names_from = common_name,
+    values_from = activity_anomaly
+  ) %>%
+  arrange(month)
+
+anomaly_correlations <- cor(
+  anomaly_wide %>% select(-month),
+  use = "complete.obs",
+  method = "pearson"
+)
+
+cat("\nCORRELATIONS BETWEEN MONTHLY VOCAL ACTIVITY ANOMALIES\n\n")
+print(round(anomaly_correlations, 3))
+
+# ------------------------------------------------------------
+# 8. Summarise correlations between species pairs
+# ------------------------------------------------------------
+
+anomaly_pairs <- as.data.frame(
+  as.table(anomaly_correlations)
+) %>%
+  rename(
+    bird_1 = Var1,
+    bird_2 = Var2,
+    correlation = Freq
+  ) %>%
+  filter(as.character(bird_1) < as.character(bird_2)) %>%
+  arrange(desc(correlation))
+
+cat("\nSPECIES PAIRS RANKED BY ANOMALY CORRELATION\n\n")
+print(anomaly_pairs, n = Inf)
+
+# ------------------------------------------------------------
+# Interpretation questions
+# ------------------------------------------------------------
+
+# 1. How many months of data overlap across all seven birds?
+#
+# 2. Do the birds have unusually high or low vocal activity
+#    in the same months and years?
+#
+# 3. Which species pairs remain strongly correlated after
+#    their average seasonal cycles have been removed?
+#
+# 4. Are any species behaving independently of the others?
+#
+# 5. Could environmental anomalies explain the remaining
+#    shared variation?
+#
+# IMPORTANT:
+# These correlations are descriptive and do not establish
+# common environmental drivers.
+#
+# The next stage will test temperature and soil moisture
+# relationships while accounting for species and season.
+
+```
+
+
+# Plot soil texture data (think of a proper graph)
+# Choose a bird that has a seasonal pattern (import all files and crete plots for each time series, select a few examples) - not in final code
+# 
+# Vocal activity / acoustic indices ~ season + temperature anomaly + precipitation anomaly + site (if same species is at multiple sites)
+# 
