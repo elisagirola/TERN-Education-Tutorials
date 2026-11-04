@@ -20,10 +20,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(arrow)
 
 # Main folder
-#folder <- "C:/Users/uqegirol/Desktop/Documents/Accelnet project/Data/Global_data"
+folder <- "C:\\Users\\uqegirol\\OneDrive - The University of Queensland\\Desktop\\Documents\\Accelnet project\\Data\\Global_data"
 
 #Eleanor Folder
-folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
+#folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
 
 # Find all Parquet files in the folder and all subfolders
 parquet_files <- list.files(
@@ -78,7 +78,7 @@ library(tibble)
 # 1. Main folder
 # ------------------------------------------------------------
 
-main_folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
+main_folder <- "C:\\Users\\uqegirol\\OneDrive - The University of Queensland\\Desktop\\Documents\\Accelnet project\\Data\\Global_data"
 
 
 # ------------------------------------------------------------
@@ -1650,6 +1650,26 @@ ggplot(
 # unusual increase in soil temperature?
 #
 # Display daily precipitation from 0 to 150 mm.
+
+# Select Robson Creek precipitation observations
+robson_precipitation <- GERI_precipitation_60min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    date = as.Date(start_date_time)
+  )
+
+# Calculate daily cumulative precipitation
+robson_precipitation_daily <- robson_precipitation %>%
+  group_by(date) %>%
+  summarise(
+    daily_precipitation = sum(
+      bulk_precipitation_mm,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(is.finite(daily_precipitation))
 
 ggplot(
   robson_precipitation_daily,
