@@ -19,8 +19,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(arrow)
 
-# Main folder
-folder <- "C:\\Users\\uqegirol\\OneDrive - The University of Queensland\\Desktop\\Documents\\Accelnet project\\Data\\Global_data"
+# Elisa folder
+folder <- "C:/Users/uqegirol/OneDrive - The University of Queensland/Desktop/Documents/Accelnet project/Data/Global_data"
 
 #Eleanor Folder
 #folder <- "C:/Users/uqevelas/OneDrive - The University of Queensland/Desktop/WorkQuickFiles/ESA26Workshop"
@@ -75,18 +75,11 @@ library(tibble)
 
 
 # ------------------------------------------------------------
-# 1. Main folder
-# ------------------------------------------------------------
-
-main_folder <- "C:\\Users\\uqegirol\\OneDrive - The University of Queensland\\Desktop\\Documents\\Accelnet project\\Data\\Global_data"
-
-
-# ------------------------------------------------------------
-# 2. Find all XML files
+# Find all XML files
 # ------------------------------------------------------------
 
 xml_files <- list.files(
-  path = main_folder,
+  path = folder,
   pattern = "\\.xml$",
   recursive = TRUE,
   full.names = TRUE,
@@ -97,7 +90,7 @@ cat("Number of XML files found:", length(xml_files), "\n")
 
 
 # ------------------------------------------------------------
-# 3. Function to extract information from one XML file
+# Function to extract information from one XML file
 # ------------------------------------------------------------
 
 extract_site_info <- function(xml_file) {
@@ -264,7 +257,7 @@ extract_site_info <- function(xml_file) {
 }
 
 # ------------------------------------------------------------
-# 4. Extract all XML files
+# Extract all XML files
 # ------------------------------------------------------------
 
 all_site_data <- map_dfr(
@@ -274,7 +267,7 @@ all_site_data <- map_dfr(
 
 
 # ------------------------------------------------------------
-# 5. Remove records without a site ID
+# Remove records without a site ID
 # ------------------------------------------------------------
 
 all_site_data <- all_site_data %>%
@@ -282,7 +275,7 @@ all_site_data <- all_site_data %>%
 
 
 # ------------------------------------------------------------
-# 6. Create one table per data type
+# Create one table per data type
 # ------------------------------------------------------------
 
 air_temperature <- all_site_data %>%
@@ -1651,25 +1644,17 @@ ggplot(
 #
 # Display daily precipitation from 0 to 150 mm.
 
-# Select Robson Creek precipitation observations
-robson_precipitation <- GERI_precipitation_60min %>%
+# Select Robson Creek precipitation observations.
+robson_precipitation_daily <- GERI_precipitation_60min %>%
   filter(site_id == "AU-Rob") %>%
   mutate(
-    start_date_time = as.POSIXct(start_date_time),
     date = as.Date(start_date_time)
-  )
-
-# Calculate daily cumulative precipitation
-robson_precipitation_daily <- robson_precipitation %>%
+  ) %>%
   group_by(date) %>%
   summarise(
-    daily_precipitation = sum(
-      bulk_precipitation_mm,
-      na.rm = TRUE
-    ),
+    daily_precipitation = sum(bulk_precipitation_mm, na.rm = TRUE),
     .groups = "drop"
-  ) %>%
-  filter(is.finite(daily_precipitation))
+  )
 
 ggplot(
   robson_precipitation_daily,
@@ -2072,7 +2057,7 @@ GERI_precipitation_60min %>%
   )
 
 ```
-##NOTE check with PI for Robson Creek re whether these months were genuine zero entries....
+##Question to confirm with site PI at Robson - when was the large tree removed?
 
 ```{r}
 
@@ -2212,6 +2197,8 @@ robson_soil_anomalies <- robson_soiltemperature_monthly %>%
   )
 
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 4. Plot monthly soil temperature anomalies
 # ------------------------------------------------------------
 
@@ -2227,13 +2214,18 @@ ggplot(
     linetype = "dashed"
   ) +
   geom_col(
-    aes(fill = temperature_anomaly > 0),
-    show.legend = FALSE
+    aes(fill = temperature_anomaly > 0)
   ) +
   scale_fill_manual(
+    name = "Temperature anomaly",
     values = c(
       "TRUE" = "firebrick",
       "FALSE" = "steelblue"
+    ),
+    breaks = c("TRUE", "FALSE"),
+    labels = c(
+      "Warmer than average",
+      "Cooler than average"
     )
   ) +
   scale_x_date(
@@ -2251,8 +2243,10 @@ ggplot(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom"
   )
+
 
 # ------------------------------------------------------------
 # Interpretation
@@ -2398,6 +2392,8 @@ robson_moisture_anomalies <- robson_soilmoisture_monthly %>%
 
 
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 4. Plot monthly soil moisture anomalies
 # ------------------------------------------------------------
 
@@ -2413,13 +2409,18 @@ ggplot(
     linetype = "dashed"
   ) +
   geom_col(
-    aes(fill = moisture_anomaly > 0),
-    show.legend = FALSE
+    aes(fill = moisture_anomaly > 0)
   ) +
   scale_fill_manual(
+    name = "Soil moisture anomaly",
     values = c(
       "TRUE" = "steelblue",
       "FALSE" = "firebrick"
+    ),
+    breaks = c("TRUE", "FALSE"),
+    labels = c(
+      "Wetter than average",
+      "Drier than average"
     )
   ) +
   scale_x_date(
@@ -2437,9 +2438,9 @@ ggplot(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom"
   )
-
 
 # ------------------------------------------------------------
 # Interpretation
@@ -2597,6 +2598,8 @@ robson_precipitation_anomalies <- robson_precipitation_monthly %>%
 
 
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 4. Plot monthly precipitation anomalies
 # ------------------------------------------------------------
 
@@ -2612,13 +2615,18 @@ ggplot(
     linetype = "dashed"
   ) +
   geom_col(
-    aes(fill = precipitation_anomaly > 0),
-    show.legend = FALSE
+    aes(fill = precipitation_anomaly > 0)
   ) +
   scale_fill_manual(
+    name = "Precipitation anomaly",
     values = c(
       "TRUE" = "steelblue",
       "FALSE" = "firebrick"
+    ),
+    breaks = c("TRUE", "FALSE"),
+    labels = c(
+      "Wetter than average",
+      "Drier than average"
     )
   ) +
   scale_x_date(
@@ -2636,7 +2644,8 @@ ggplot(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom"
   )
 
 
@@ -2818,6 +2827,8 @@ robson_air_anomalies <- robson_airtemperature_monthly %>%
 
 
 # ------------------------------------------------------------
+#
+# ------------------------------------------------------------
 # 5. Plot monthly air temperature anomalies
 # ------------------------------------------------------------
 
@@ -2833,13 +2844,18 @@ ggplot(
     linetype = "dashed"
   ) +
   geom_col(
-    aes(fill = temperature_anomaly > 0),
-    show.legend = FALSE
+    aes(fill = temperature_anomaly > 0)
   ) +
   scale_fill_manual(
+    name = "Temperature anomaly",
     values = c(
       "TRUE" = "firebrick",
       "FALSE" = "steelblue"
+    ),
+    breaks = c("TRUE", "FALSE"),
+    labels = c(
+      "Warmer than average",
+      "Cooler than average"
     )
   ) +
   scale_x_date(
@@ -2857,9 +2873,9 @@ ggplot(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom"
   )
-
 
 # ------------------------------------------------------------
 # Interpretation
@@ -3091,6 +3107,8 @@ robson_moisture_rainfall_comparison <- robson_moisture_anomalies %>%
   )
 
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 2. Plot both anomalies with separate y-axis scales
 # ------------------------------------------------------------
 
@@ -3104,13 +3122,18 @@ ggplot(
     colour = "grey50"
   ) +
   geom_col(
-    aes(fill = anomaly >= 0),
-    show.legend = FALSE
+    aes(fill = anomaly >= 0)
   ) +
   scale_fill_manual(
+    name = "Moisture and precipitation anomalies",
     values = c(
       "TRUE" = "steelblue",
       "FALSE" = "firebrick"
+    ),
+    breaks = c("TRUE", "FALSE"),
+    labels = c(
+      "Wetter than average",
+      "Drier than average"
     )
   ) +
   facet_wrap(
@@ -3133,7 +3156,8 @@ ggplot(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom"
   )
 
 # ------------------------------------------------------------
@@ -3256,15 +3280,60 @@ robson_all_anomalies <- robson_soil_anomalies %>%
 
 
 # ------------------------------------------------------------
-# 2. Plot all four anomalies
+
+# 
 # ------------------------------------------------------------
+# 2. Plot all four environmental anomalies
+# ------------------------------------------------------------
+
+# Assign separate colour pairs to each environmental variable.
+# Positive temperature anomalies indicate warmer conditions.
+# Positive moisture and precipitation anomalies indicate wetter
+# conditions. Negative anomalies indicate the opposite.
+
+robson_all_anomalies <- robson_all_anomalies %>%
+  mutate(
+    anomaly_category = case_when(
+      grepl("soil temperature", variable, ignore.case = TRUE) &
+        anomaly >= 0 ~ "Soil temp: warmer",
+      grepl("soil temperature", variable, ignore.case = TRUE) &
+        anomaly < 0 ~ "Soil temp: cooler",
+
+      grepl("air temperature", variable, ignore.case = TRUE) &
+        anomaly >= 0 ~ "Air temp: warmer",
+      grepl("air temperature", variable, ignore.case = TRUE) &
+        anomaly < 0 ~ "Air temp: cooler",
+
+      grepl("soil moisture", variable, ignore.case = TRUE) &
+        anomaly >= 0 ~ "Soil moisture: wetter",
+      grepl("soil moisture", variable, ignore.case = TRUE) &
+        anomaly < 0 ~ "Soil moisture: drier",
+
+      grepl("precipitation", variable, ignore.case = TRUE) &
+        anomaly >= 0 ~ "Rainfall: wetter",
+      grepl("precipitation", variable, ignore.case = TRUE) &
+        anomaly < 0 ~ "Rainfall: drier",
+
+      TRUE ~ NA_character_
+    )
+  )
+
+# Define colours and compact legend labels.
+
+anomaly_colours <- c(
+  "Soil temp: warmer" = "#B22222",
+  "Soil temp: cooler" = "#4682B4",
+  "Air temp: warmer" = "#E88B43",
+  "Air temp: cooler" = "#6A79B8",
+  "Soil moisture: wetter" = "#25877D",
+  "Soil moisture: drier" = "#C59A55",
+  "Rainfall: wetter" = "#2364AA",
+  "Rainfall: drier" = "#A48A73"
+)
 
 ggplot(
   robson_all_anomalies,
-  aes(
-    x = month,
-    y = anomaly
-  )
+  aes(x = month, y = anomaly)
 ) +
   geom_hline(
     yintercept = 0,
@@ -3272,14 +3341,13 @@ ggplot(
     colour = "grey50"
   ) +
   geom_col(
-    aes(fill = anomaly >= 0),
-    show.legend = FALSE
+    aes(fill = anomaly_category)
   ) +
   scale_fill_manual(
-    values = c(
-      "TRUE" = "steelblue",
-      "FALSE" = "firebrick"
-    )
+    name = NULL,
+    values = anomaly_colours,
+    breaks = names(anomaly_colours),
+    drop = FALSE
   ) +
   facet_wrap(
     ~ variable,
@@ -3292,18 +3360,32 @@ ggplot(
   ) +
   labs(
     title = "Robson Creek: environmental anomalies",
-    subtitle = "Relative to the 2013–2023 seasonal baseline; late-2025 rainfall unverified",
+    subtitle = paste(
+      "Relative to the 2013–2023 seasonal baseline;",
+      "late-2025 rainfall unverified"
+    ),
     x = "Month",
     y = NULL
+  ) +
+  guides(
+    fill = guide_legend(
+      nrow = 4,
+      byrow = TRUE,
+      override.aes = list(colour = NA)
+    )
   ) +
   theme_minimal() +
   theme(
     axis.text.x = element_text(
       angle = 45,
       hjust = 1
-    )
+    ),
+    legend.position = "bottom",
+    legend.text = element_text(size = 7),
+    legend.key.size = grid::unit(0.3, "cm"),
+    legend.spacing.y = grid::unit(0.05, "cm"),
+    legend.margin = margin(0, 0, 0, 0)
   )
-
 
 # ------------------------------------------------------------
 # Interpretation
@@ -3340,7 +3422,7 @@ ggplot(
 
 ```
 ```{r}
-###REMOVE THIS FROM THE FINAL CODE - JUST SHOWS THAT ROBSON CK DOES NOT HAVE BIRD CALLS FOR THE TIME PERIOD OF THE SOIL TEMP ANOMALY
+###NOTE: REMOVE THIS FROM THE FINAL CODE - JUST SHOWS THAT ROBSON CK DOES NOT HAVE BIRD CALLS FOR THE TIME PERIOD OF THE SOIL TEMP ANOMALY so not much to explore there
 
 # ------------------------------------------------------------
 # Robson Creek: temporal coverage of bird acoustic records
@@ -3620,7 +3702,37 @@ ggplot(
 # 5. Which years could support comparison with bird detections?
 
 ```
+#load acoustic data into R
+
+```{r}
+# Load the TERN ecoacoustic CSV files into a named list.
+acoustic_files <- list.files(
+  path = folder,
+  pattern = "\\.csv$",
+  full.names = TRUE,
+  recursive = TRUE
+)
+
+# Select the TERN JCU ecoacoustic datasets.
+acoustic_files <- acoustic_files[
+  grepl("TERNJCU", basename(acoustic_files), fixed = TRUE)
+]
+
+# Load each dataset as a separate data frame.
+acoustic_data <- lapply(acoustic_files, read.csv, check.names = FALSE)
+
+# Retain the original filenames as list names.
+names(acoustic_data) <- basename(acoustic_files)
+
+# Check the number of datasets loaded.
+length(acoustic_data)
+```
+
+
 #see if bird calls match black summer bush fire at Tumbarumba....
+#note no data after 2019 so can't use that in analyses
+#however we do know that leading up to 2019 black summer bush fires it was very dry so potentially could use that in analysis
+#can remove this from final workshop as only exploratory
 
 ```{r}
 
@@ -3771,7 +3883,7 @@ ggplot(
 # continuous monitoring throughout that year.
 
 ```
-##  triple check bird acoustic data
+##  triple check bird acoustic data - yes stops at 2019 - starts at 2012
 
 ```{r}
 
@@ -3789,7 +3901,8 @@ tumba_dates %>%
 
 ```
 
-#determine which bird species occur across multiple sites:
+#determine which bird species occur across multiple sites
+#can remove this from the final workshop as only exploratory
 
 ```{r}
 
@@ -4357,17 +4470,18 @@ print(tumba_environment_coverage, row.names = FALSE)
 
 ```
 
-##does tumba have precipiation
+##does tumba have precipiation - not sure if there is a gap here... need to check
 
 ```{r}
 
 # Identify the sites represented in the precipitation dataset.
 # Check whether Tumbarumba uses a different site name.
 
-GERI_precipitation_60min %>%
+tumb_sites <- GERI_precipitation_60min %>%
   distinct(site_name) %>%
-  filter(grepl("Tumb|tum", site_name, ignore.case = TRUE)) %>%
-  print(n = Inf)
+  filter(grepl("Tumb|tum", site_name, ignore.case = TRUE))
+
+View(tumb_sites)
 
 ```
 
@@ -4524,6 +4638,7 @@ ggplot(
 
 ```
 ##model test of grey fantail at Tumba
+#it's a bit overdispersed... so maybe not the best analysis to include
 
 ```{r}
 
@@ -5592,6 +5707,7 @@ print(
 
 ```
 
+##most likely keep the below for the workshop but maybe simplify just to the correlation list matrix and have a cut off of 0.86 in the next analyses
 
 ```{r}
 
@@ -5816,6 +5932,7 @@ print(
 
 ```
 
+##Ok - so do we proceed with further analyses here or just use a single species - not sure where to take it from here or if other analyses are valid
 
 ```{r}
 
@@ -6030,7 +6147,8 @@ anomaly_pairs <- as.data.frame(
   arrange(desc(correlation))
 
 cat("\nSPECIES PAIRS RANKED BY ANOMALY CORRELATION\n\n")
-print(anomaly_pairs, n = Inf)
+#print(anomaly_pairs, n = Inf)
+print(as.data.frame(anomaly_pairs))
 
 # ------------------------------------------------------------
 # Interpretation questions
