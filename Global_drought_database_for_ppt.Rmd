@@ -242,7 +242,7 @@ extract_site_info <- function(xml_file) {
     
     
     # --------------------------------------------------------
-    # Return one row for this site
+    # Return one row for each site
     # --------------------------------------------------------
     
     tibble(
@@ -306,133 +306,17 @@ soil_texture <- all_site_data %>%
 ```
 
 
-# Temporal coverage 
-```{r}
-# Temporal coverage - Air temperature
-library(ggplot2)
-library(lubridate)
-library(dplyr)
 
-# convert the two date columns to proper date-time values
-GERI_airtemperature_30min <- GERI_airtemperature_30min %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time),
-    end_date_time = as.POSIXct(end_date_time)
-  )
-
-# determine the gaps in the air-temperature data
-airtemperature_gaps <- GERI_airtemperature_30min %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id, site_name) %>%
-  mutate(
-    gap = start_date_time - lag(end_date_time)
-  ) %>%
-  filter(!is.na(gap) & gap > 30 * 60)
-
-# turn the data into continuous coverage periods. Each period will become one horizontal segment in the graph, so gaps will be visible.
-airtemperature_periods <- GERI_airtemperature_30min %>%
-  filter(!is.na(mean_air_temp_degC)) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id, site_name) %>%
-  mutate(
-    gap = start_date_time - lag(end_date_time),
-    period = cumsum(
-      is.na(gap) | gap > 30 * 60
-    )
-  ) %>%
-  group_by(site_id, site_name, period) %>%
-  summarise(
-    start_date = min(start_date_time, na.rm = TRUE),
-    end_date = max(end_date_time, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-
-```
-
-
-# create the temporal coverage graph
-```{r air-temperature-coverage, fig.width=12, fig.height=15}
-ggplot(
-  airtemperature_periods,
-  aes(
-    x = start_date,
-    xend = end_date,
-    y = site_id,
-    yend = site_id
-  )
-) +
-  geom_segment(linewidth = 3) +
-  labs(
-    title = "Air temperature temporal coverage",
-    x = "Date",
-    y = "Site"
-  ) +
-  theme_minimal()
-
-```
 
 # ELISA ppt
 # GERI db > overview, global prospective, summary data
 
+# global map
 
-# ELEANOR ppt
-# Australia > correlations between GERI variables and acoustic data (indices and/or time series of bird calls)
-
-
-# WORKSHOP
-# Bring it all together
-# Reading the data files - parquet
-# Reading the metadata files - EML
-
-# The world
-#
-# Create maps (one map for each variable)
-# Create data coverage plots (one for each long-term variable, group by RI)
-# Create anomalies plots (data below or above average) (one for each long-term variable - but may only show the interesting ones)
-# Soil texture data - create plots (think of a proper graph)
-# Look at long term trends and/or compare with WMO extreme events
-# Soil moisture ~ soil sand % + soil clay % + soil silt % + precipitation + air temperature + site (or latitude? or ecosystem type?)
- 
- 
- 
-```{r}
-
-# Explore the geographic coverage of the datasets
-
-# Count the number of sites for each variable
-site_counts <- all_site_data %>%
-  group_by(data_type) %>%
-  summarise(
-    n_sites = n_distinct(site_id),
-    n_with_coordinates = n_distinct(
-      site_id[!is.na(latitude) & !is.na(longitude)]
-    ),
-    .groups = "drop"
-  )
-
-# Display the results
-print(site_counts)
-
-```
-```{r}
-
-# Check the geographic extent of the sites
-
-all_site_data %>%
-  filter(!is.na(latitude), !is.na(longitude)) %>%
-  summarise(
-    minimum_latitude = min(latitude),
-    maximum_latitude = max(latitude),
-    minimum_longitude = min(longitude),
-    maximum_longitude = max(longitude)
-  )
-
-```
 ```{r}
 
 
-## 3. Where are the monitoring sites located?
+## 3. Where are the monitoring sites located? > CHANGE TO ONLY ONE MAP
 
 #Mapping environmental monitoring sites allows us to visualise their geographic distribution and identify regions where observations may be limited.
 
@@ -514,159 +398,81 @@ geom_point(
 print(separate_maps)
 ```
 
-```{r}
 
-# Check whether the environmental variables share the same sites
-# This helps us determine whether the similar maps are expected.
-
-# Create a list of site IDs for each environmental variable
-site_lists <- split(
-  site_map_data$site_id,
-  site_map_data$data_type
-)
-
-# Compare the site IDs between environmental variables
-# TRUE means both variables have exactly the same site IDs
-# FALSE means their site lists differ
-
-site_comparison <- outer(
-  names(site_lists),
-  names(site_lists),
-  Vectorize(function(x, y) {
-    setequal(site_lists[[x]], site_lists[[y]])
-  })
-)
-
-# Add variable names to the comparison table
-dimnames(site_comparison) <- list(
-  names(site_lists),
-  names(site_lists)
-)
-
-# Display the results
-print(site_comparison)
-
-```
-
-```{r}
-
-# List the imported Parquet datasets
-names(parquet_data)
-
-# Display the column names in each dataset
-lapply(parquet_data, names)
-
-```
+# Spatial and temporal covers
+ Graph of Ecosystem types (bar graph)
+ latitude distribution (histogram)
+ elevation distribution (histogram)
+ Temporal cover (bar graph from Eleanor – group by continent or RI?)
  
-```{r}
 
-# Check the earliest and latest observations in each dataset
+```{r air-temperature-coverage, fig.width=12, fig.height=15}
+ # create the temporal coverage graph FOR ONE VARIABLE - EACH SITE
 
 
-# Summarise the environmental datasets
-# Show observations, sites, research infrastructures and date ranges
-
+library(ggplot2)
+library(lubridate)
 library(dplyr)
 
-data_summary <- bind_rows(
-  lapply(names(parquet_data), function(file) {
+# convert the two date columns to proper date-time values
+GERI_airtemperature_30min <- GERI_airtemperature_30min %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time),
+    end_date_time = as.POSIXct(end_date_time)
+  )
 
-    x <- parquet_data[[file]]
+# determine the gaps in the air-temperature data
+airtemperature_gaps <- GERI_airtemperature_30min %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time)
+  ) %>%
+  filter(!is.na(gap) & gap > 30 * 60)
 
-    # Static soil texture data use date_collected
-    # Other datasets use start_date_time and end_date_time
-    if ("start_date_time" %in% names(x)) {
-      first_date <- min(as.Date(x$start_date_time), na.rm = TRUE)
-      last_date <- max(as.Date(x$end_date_time), na.rm = TRUE)
-    } else {
-      first_date <- min(as.Date(x$date_collected), na.rm = TRUE)
-      last_date <- max(as.Date(x$date_collected), na.rm = TRUE)
-    }
-
-    data.frame(
-      dataset = tools::file_path_sans_ext(file),
-      observations = nrow(x),
-      sites = n_distinct(x$site_id),
-      research_infrastructures = n_distinct(x$research_infrastructure),
-      first_date = first_date,
-      last_date = last_date
+# turn the data into continuous coverage periods. Each period will become one horizontal segment in the graph, so gaps will be visible.
+airtemperature_periods <- GERI_airtemperature_30min %>%
+  filter(!is.na(mean_air_temp_degC)) %>%
+  arrange(site_id, start_date_time) %>%
+  group_by(site_id, site_name) %>%
+  mutate(
+    gap = start_date_time - lag(end_date_time),
+    period = cumsum(
+      is.na(gap) | gap > 30 * 60
     )
-  })
-)
-
-# Display all five datasets in one table
-print(data_summary)
-
-```
- 
- 
-```{r}
-
-# Summarise air temperature coverage by research infrastructure
-# Count sites and identify the earliest and latest observations
-
-air_coverage_summary <- GERI_airtemperature_30min %>%
-  group_by(research_infrastructure) %>%
+  ) %>%
+  group_by(site_id, site_name, period) %>%
   summarise(
-    n_sites = n_distinct(site_id),
-    first_date = as.Date(min(start_date_time, na.rm = TRUE)),
-    last_date = as.Date(max(end_date_time, na.rm = TRUE)),
+    start_date = min(start_date_time, na.rm = TRUE),
+    end_date = max(end_date_time, na.rm = TRUE),
     .groups = "drop"
   )
 
-# Display the summary table
-print(air_coverage_summary)
+
+ggplot(
+  airtemperature_periods,
+  aes(
+    x = start_date,
+    xend = end_date,
+    y = site_id,
+    yend = site_id
+  )
+) +
+  geom_segment(linewidth = 3) +
+  labs(
+    title = "Air temperature temporal coverage",
+    x = "Date",
+    y = "Site"
+  ) +
+  theme_minimal()
 
 ```
  
-```{r}
 
-# Summarise temporal coverage for all four environmental variables
-# Soil texture is excluded because it is not a time-series dataset
-
-# Identify the four time-series datasets
-time_series_files <- c(
-  "GERI_airtemperature_30min.parquet",
-  "GERI_precipitation_60min.parquet",
-  "GERI_soilmoisture_30min.parquet",
-  "GERI_soiltemperature_30min.parquet"
-)
-
-# Give the variables readable names
-variable_names <- c(
-  "Air temperature",
-  "Precipitation",
-  "Soil moisture",
-  "Soil temperature"
-)
-
-# Combine the summaries into one table
-coverage_summary <- bind_rows(
-  lapply(seq_along(time_series_files), function(i) {
-
-    parquet_data[[time_series_files[i]]] %>%
-      group_by(research_infrastructure) %>%
-      summarise(
-        n_sites = n_distinct(site_id),
-        first_date = as.Date(min(start_date_time, na.rm = TRUE)),
-        last_date = as.Date(max(end_date_time, na.rm = TRUE)),
-        .groups = "drop"
-      ) %>%
-      mutate(variable = variable_names[i], .before = 1)
-
-  })
-)
-
-# Display the combined table
-print(coverage_summary, n = Inf)
-
-```
- 
- 
 ```{r}
 
 # ------------------------------------------------------------
-# 4. How does temporal coverage differ between environmental variables?
+# 4. How does temporal coverage differ between environmental variables? > CREATE JUST ONE PLOT OR ALL VARIABLES
 # ------------------------------------------------------------
 
 # Environmental datasets may differ in the periods over which
@@ -684,6 +490,45 @@ print(coverage_summary, n = Inf)
 
 
 # Create a temporal coverage graph
+
+# Summarise temporal coverage for all four environmental variables
+# Soil texture is excluded because it is not a time-series dataset
+ 
+# Identify the four time-series datasets
+time_series_files <- c(
+  "GERI_airtemperature_30min.parquet",
+  "GERI_precipitation_60min.parquet",
+  "GERI_soilmoisture_30min.parquet",
+  "GERI_soiltemperature_30min.parquet"
+)
+ 
+# Give the variables readable names
+variable_names <- c(
+  "Air temperature",
+  "Precipitation",
+  "Soil moisture",
+  "Soil temperature"
+)
+ 
+# Combine the summaries into one table
+coverage_summary <- bind_rows(
+  lapply(seq_along(time_series_files), function(i) {
+ 
+    parquet_data[[time_series_files[i]]] %>%
+      group_by(research_infrastructure) %>%
+      summarise(
+        n_sites = n_distinct(site_id),
+        first_date = as.Date(min(start_date_time, na.rm = TRUE)),
+        last_date = as.Date(max(end_date_time, na.rm = TRUE)),
+        .groups = "drop"
+      ) %>%
+      mutate(variable = variable_names[i], .before = 1)
+ 
+  })
+)
+ 
+
+
 ggplot(
   coverage_summary,
   aes(
@@ -721,12 +566,23 @@ ggplot(
 ```
  
 
+# Soil texture
+  Show triangle of soil types and place dots for different sites (Different colours for ecosystem types. Different symbols for   continents.)
 
+# Air temperature and Precipitation
 
+# Soil temperature and soil moisture
 
+# model of soil moisture
 
+Soil moisture ~ air temp + precip + soil texture + ecosystem type + year * continent
 
+Remember that we don't have soil texture for all sites
+ 
+ 
+ 
 
+ 
 
 
 
@@ -1013,400 +869,16 @@ ggplot(
 
 
 
-# Australia
+
+
+
+
+
+
+
+# AUSTRALIA
 # Maps of Australian sites (one map for each variable)
-# Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
 
-
-```{r}
-# Select only sites with AU- in the site_id
-# Convert date-time and identify gaps in the 30-minute time series
-library(dplyr)
-library(ggplot2)
-library(ggforce)
-GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
-  filter(grepl("AU-", site_id)) %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time)
-  ) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id) %>%
-  mutate(
-    time_gap = as.numeric(
-      difftime(
-        start_date_time,
-        lag(start_date_time),
-        units = "mins"
-      )
-    ),
-    # Start a new line segment when there is a gap
-    # of more than 31 minutes
-    segment = cumsum(
-      if_else(
-        is.na(time_gap) | time_gap > 31,
-        1,
-        0
-      )
-    )
-  ) %>%
-  ungroup()
-
-# Number of sites
-n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
-
-# Number of pages needed (9 sites per page)
-n_pages <- ceiling(n_sites / 9)
-
-cat("Number of AU sites:", n_sites, "\n")
-cat("Number of pages:", n_pages, "\n")
-
-# Create one plot per page
-for (page in 1:n_pages) {
-  
-  p <- ggplot(
-    GERI_soilmoisture_30min_AU,
-    aes(
-      x = start_date_time,
-      y = mean_swc_percent
-    )
-  ) +
-    geom_line(
-      aes(group = interaction(site_id, segment))
-    ) +
-    facet_wrap_paginate(
-      ~ site_id,
-      ncol = 3,
-      nrow = 3,
-      page = page,
-      scales = "free_x"
-    ) +
-    labs(
-      x = "Date",
-      y = "Mean soil moisture (percent)",
-      title = paste(
-        "Soil moisture time series — AU sites",
-        "(page", page, "of", n_pages, ")"
-      )
-    ) +
-    theme_bw()
-  
-  print(p)
-}
-```
-
-#soil moisture australia
-```{r}
-# Australia
-#
-# Maps of Australian sites (one map for each variable)
-# Plot time series (one for each long-term variable) > tell cool stories about local events, e.g. soil temp at Robson
-
-# Soil moisture Australia
-
-# Select only sites with AU- in the site_id
-# Convert date-time and identify gaps in the 30-minute time series
-library(dplyr)
-library(ggplot2)
-library(ggforce)
-GERI_soilmoisture_30min_AU <- GERI_soilmoisture_30min %>%
-  filter(grepl("AU-", site_id)) %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time)
-  ) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id) %>%
-  mutate(
-    time_gap = as.numeric(
-      difftime(
-        start_date_time,
-        lag(start_date_time),
-        units = "mins"
-      )
-    ),
-    # Start a new line segment when there is a gap
-    # of more than 31 minutes
-    segment = cumsum(
-      if_else(
-        is.na(time_gap) | time_gap > 31,
-        1,
-        0
-      )
-    )
-  ) %>%
-  ungroup()
-
-# Number of sites
-n_sites <- n_distinct(GERI_soilmoisture_30min_AU$site_id)
-
-# Number of pages needed (9 sites per page)
-n_pages <- ceiling(n_sites / 9)
-
-cat("Number of AU sites:", n_sites, "\n")
-cat("Number of pages:", n_pages, "\n")
-
-# Create one plot per page
-for (page in 1:n_pages) {
-  
-  p <- ggplot(
-    GERI_soilmoisture_30min_AU,
-    aes(
-      x = start_date_time,
-      y = mean_swc_percent
-    )
-  ) +
-    geom_line(
-      aes(group = interaction(site_id, segment))
-    ) +
-    facet_wrap_paginate(
-      ~ site_id,
-      ncol = 3,
-      nrow = 3,
-      page = page,
-      scales = "free_x"
-    ) +
-    labs(
-      x = "Date",
-      y = "Mean soil moisture (percent)",
-      title = paste(
-        "Soil moisture time series — AU sites",
-        "(page", page, "of", n_pages, ")"
-      )
-    ) +
-    theme_bw()
-  
-  print(p)
-}
-```
-
-```{r}
-
-## Soil temperature Australia
-# Select only sites with AU- in the site_id
-# Convert date-time and identify gaps in the 30-minute time series
-GERI_soiltemperature_30min_AU <- GERI_soiltemperature_30min %>%
-  filter(grepl("AU-", site_id)) %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time)
-  ) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id) %>%
-  mutate(
-    time_gap = as.numeric(
-      difftime(
-        start_date_time,
-        lag(start_date_time),
-        units = "mins"
-      )
-    ),
-    # Start a new line segment when there is a gap
-    # of more than 31 minutes
-    segment = cumsum(
-      if_else(
-        is.na(time_gap) | time_gap > 31,
-        1,
-        0
-      )
-    )
-  ) %>%
-  ungroup()
-
-# Number of sites
-n_sites <- n_distinct(GERI_soiltemperature_30min_AU$site_id)
-
-# Number of pages needed (9 sites per page)
-n_pages <- ceiling(n_sites / 9)
-
-cat("Number of AU sites:", n_sites, "\n")
-cat("Number of pages:", n_pages, "\n")
-
-# Create one plot per page
-for (page in 1:n_pages) {
-  
-  p <- ggplot(
-    GERI_soiltemperature_30min_AU,
-    aes(
-      x = start_date_time,
-      y = mean_soil_temp_degC
-    )
-  ) +
-    geom_line(
-      aes(group = interaction(site_id, segment))
-    ) +
-    facet_wrap_paginate(
-      ~ site_id,
-      ncol = 3,
-      nrow = 3,
-      page = page,
-      scales = "free_x"
-    ) +
-    labs(
-      x = "Date",
-      y = "Mean soil temperature (degrees)",
-      title = paste(
-        "Soil temperature time series — AU sites",
-        "(page", page, "of", n_pages, ")"
-      )
-    ) +
-    theme_bw()
-  
-  print(p)
-}
-```
-
-
-
-
-
-
-```{r}
-
-## Air temperature Australia
-# Select only sites with AU- in the site_id
-# Convert date-time and identify gaps in the 30-minute time series
-GERI_airtemperature_30min_AU <- GERI_airtemperature_30min %>%
-  filter(grepl("AU-", site_id)) %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time)
-  ) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id) %>%
-  mutate(
-    time_gap = as.numeric(
-      difftime(
-        start_date_time,
-        lag(start_date_time),
-        units = "mins"
-      )
-    ),
-    # Start a new line segment when there is a gap
-    # of more than 31 minutes
-    segment = cumsum(
-      if_else(
-        is.na(time_gap) | time_gap > 61,
-        1,
-        0
-      )
-    )
-  ) %>%
-  ungroup()
-
-# Number of sites
-n_sites <- n_distinct(GERI_airtemperature_30min_AU$site_id)
-
-# Number of pages needed (9 sites per page)
-n_pages <- ceiling(n_sites / 9)
-
-cat("Number of AU sites:", n_sites, "\n")
-cat("Number of pages:", n_pages, "\n")
-
-# Create one plot per page
-for (page in 1:n_pages) {
-  
-  p <- ggplot(
-    GERI_airtemperature_30min_AU,
-    aes(
-      x = start_date_time,
-      y = mean_air_temp_degC
-    )
-  ) +
-    geom_line(
-      aes(group = interaction(site_id, segment))
-    ) +
-    facet_wrap_paginate(
-      ~ site_id,
-      ncol = 3,
-      nrow = 3,
-      page = page,
-      scales = "free_x"
-    ) +
-    labs(
-      x = "Date",
-      y = "Mean air temperature (degrees)",
-      title = paste(
-        "Air temperature time series — AU sites",
-        "(page", page, "of", n_pages, ")"
-      )
-    ) +
-    theme_bw()
-  
-  print(p)
-}
-
-```
-```{r}
-## Precipitation Australia
-# Select only sites with AU- in the site_id
-# Convert date-time and identify gaps in the 30-minute time series
-GERI_precipitation_60min_AU <- GERI_precipitation_60min %>%
-  filter(grepl("AU-", site_id)) %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time)
-  ) %>%
-  arrange(site_id, start_date_time) %>%
-  group_by(site_id) %>%
-  mutate(
-    time_gap = as.numeric(
-      difftime(
-        start_date_time,
-        lag(start_date_time),
-        units = "mins"
-      )
-    ),
-    # Start a new line segment when there is a gap
-    # of more than 61 minutes
-    segment = cumsum(
-      if_else(
-        is.na(time_gap) | time_gap > 61,
-        1,
-        0
-      )
-    )
-  ) %>%
-  ungroup()
-
-# Number of sites
-n_sites <- n_distinct(GERI_precipitation_60min_AU$site_id)
-
-# Number of pages needed (9 sites per page)
-n_pages <- ceiling(n_sites / 9)
-
-cat("Number of AU sites:", n_sites, "\n")
-cat("Number of pages:", n_pages, "\n")
-
-# Create one plot per page
-for (page in 1:n_pages) {
-  
-  p <- ggplot(
-    GERI_precipitation_60min_AU,
-    aes(
-      x = start_date_time,
-      y = bulk_precipitation_mm
-    )
-  ) +
-    geom_line(
-      aes(group = interaction(site_id, segment))
-    ) +
-    facet_wrap_paginate(
-      ~ site_id,
-      ncol = 3,
-      nrow = 3,
-      page = page,
-      scales = "free_x"
-    ) +
-    labs(
-      x = "Date",
-      y = "Cumulative precipitation (mm)",
-      title = paste(
-        "Precipitation time series — AU sites",
-        "(page", page, "of", n_pages, ")"
-      )
-    ) +
-    theme_bw()
-  
-  print(p)
-}
-
-```
 ```{r}
 
 # ------------------------------------------------------------
@@ -1451,235 +923,14 @@ ggplot() +
 
 ```
 
-```{r}
+# tell cool stories about local events, e.g. soil temp at Robson
 
-# Find Robson Creek in the site metadata
-
-all_site_data %>%
-  filter(grepl("Robson", site_name, ignore.case = TRUE)) %>%
-  distinct(site_id, site_name, latitude, longitude)
-
-```
 
 ```{r}
 
 # ------------------------------------------------------------
-# Robson Creek: daily mean soil temperature
-# ------------------------------------------------------------
-
-library(dplyr)
-library(ggplot2)
-
-# Select Robson Creek soil temperature observations
-robson_soiltemperature <- GERI_soiltemperature_30min %>%
-  filter(site_id == "AU-Rob") %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time),
-    date = as.Date(start_date_time)
-  )
-
-# Calculate daily mean soil temperature
-robson_soiltemperature_daily <- robson_soiltemperature %>%
-  group_by(date) %>%
-  summarise(
-    mean_soil_temperature = mean(
-      mean_soil_temp_degC,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  ) %>%
-  filter(is.finite(mean_soil_temperature))
-
-# Plot daily mean soil temperature
-ggplot(
-  robson_soiltemperature_daily,
-  aes(
-    x = date,
-    y = mean_soil_temperature
-  )
-) +
-  geom_line() +
-  labs(
-    title = "Robson Creek: daily mean soil temperature",
-    subtitle = "Robson Creek Flux Station, Queensland",
-    x = "Date",
-    y = "Mean soil temperature (°C)"
-  ) +
-  theme_minimal()
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: daily mean air temperature
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did soil temperatures increase because the surrounding air
-# became hotter, or because conditions at the soil surface changed?
-#
-# If soil temperature rises dramatically while air temperature
-# maintains its previous seasonal pattern, that would strengthen
-# the case for a local canopy effect.
-#
-# Compare the timing and magnitude of temperature changes.
-# Does air temperature show a similar increase during 2024–2025?
-
-library(dplyr)
-library(ggplot2)
-
-# Select Robson Creek air temperature observations
-robson_airtemperature <- GERI_airtemperature_30min %>%
-  filter(site_id == "AU-Rob") %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time),
-    date = as.Date(start_date_time)
-  )
-
-# Calculate daily mean air temperature
-robson_airtemperature_daily <- robson_airtemperature %>%
-  group_by(date) %>%
-  summarise(
-    mean_air_temperature = mean(
-      mean_air_temp_degC,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  ) %>%
-  filter(is.finite(mean_air_temperature))
-
-# Plot daily mean air temperature
-ggplot(
-  robson_airtemperature_daily,
-  aes(
-    x = date,
-    y = mean_air_temperature
-  )
-) +
-  geom_line() +
-  labs(
-    title = "Robson Creek: daily mean air temperature",
-    subtitle = "Robson Creek Flux Station, Queensland",
-    x = "Date",
-    y = "Mean air temperature (°C)"
-  ) +
-  theme_minimal()
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: daily mean soil moisture
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did soil moisture change when soil temperature increased?
-#
-# Could drier soil have contributed to the higher temperatures?
-#
-# Did the removal of the large tree alter soil moisture
-# through changes in shading, evaporation or water uptake?
-#
-# Examine the soil moisture pattern during 2024–2025.
-# Is there a sustained change or just seasonal variation?
-
-library(dplyr)
-library(ggplot2)
-
-# Select Robson Creek soil moisture observations
-robson_soilmoisture <- GERI_soilmoisture_30min %>%
-  filter(site_id == "AU-Rob") %>%
-  mutate(
-    start_date_time = as.POSIXct(start_date_time),
-    date = as.Date(start_date_time)
-  )
-
-# Calculate daily mean soil moisture
-robson_soilmoisture_daily <- robson_soilmoisture %>%
-  group_by(date) %>%
-  summarise(
-    mean_soil_moisture = mean(
-      mean_swc_percent,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  ) %>%
-  filter(is.finite(mean_soil_moisture))
-
-# Plot daily mean soil moisture
-ggplot(
-  robson_soilmoisture_daily,
-  aes(
-    x = date,
-    y = mean_soil_moisture
-  )
-) +
-  geom_line() +
-  labs(
-    title = "Robson Creek: daily mean soil moisture",
-    subtitle = "Robson Creek Flux Station, Queensland",
-    x = "Date",
-    y = "Mean soil moisture (%)"
-  ) +
-  theme_minimal()
-
-```
-```{r}
-
-
-# ------------------------------------------------------------
-# Robson Creek: daily precipitation
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did precipitation decline during 2024–2025?
-#
-# Could reduced rainfall explain the decline in soil moisture?
-#
-# Does the timing of rainfall changes correspond with the
-# unusual increase in soil temperature?
-#
-# Display daily precipitation from 0 to 150 mm.
-
-# Select Robson Creek precipitation observations.
-robson_precipitation_daily <- GERI_precipitation_60min %>%
-  filter(site_id == "AU-Rob") %>%
-  mutate(
-    date = as.Date(start_date_time)
-  ) %>%
-  group_by(date) %>%
-  summarise(
-    daily_precipitation = sum(bulk_precipitation_mm, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-ggplot(
-  robson_precipitation_daily,
-  aes(
-    x = date,
-    y = daily_precipitation
-  )
-) +
-  geom_col() +
-  coord_cartesian(ylim = c(0, 150)) +
-  labs(
-    title = "Robson Creek: daily precipitation",
-    subtitle = "Robson Creek Flux Station, Queensland",
-    x = "Date",
-    y = "Daily precipitation (mm)"
-  ) +
-  theme_minimal()
-
-
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: monthly soil temperature and soil moisture
+# Robson Creek: monthly soil temperature, soil moisture
+# and precipitation
 # ------------------------------------------------------------
 
 # Scientific investigation
@@ -1699,58 +950,97 @@ ggplot(
 # maintains its previous seasonal pattern, that would strengthen
 # the case for a local canopy effect.
 #
-# Examine the period 2023–2026 to investigate the recent changes.
+# Examine the period 2023–2026 to investigate recent changes.
+
 
 library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(lubridate)
 
+
 # ------------------------------------------------------------
-# 1. Calculate monthly mean soil temperature
+# Calculate monthly mean soil temperature
 # ------------------------------------------------------------
 
-robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
-  mutate(month = floor_date(date, unit = "month")) %>%
+robson_soiltemperature <- GERI_soiltemperature_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  )
+
+robson_soiltemperature_monthly <- robson_soiltemperature %>%
+  mutate(month = floor_date(start_date_time, unit = "month")) %>%
   group_by(month) %>%
   summarise(
-    soil_temperature = mean(
-      mean_soil_temperature,
-      na.rm = TRUE
-    ),
+    soil_temperature = if (all(is.na(mean_soil_temp_degC))) {
+      NA_real_
+    } else {
+      mean(mean_soil_temp_degC, na.rm = TRUE)
+    },
     .groups = "drop"
   )
 
+
 # ------------------------------------------------------------
-# 2. Calculate monthly mean soil moisture
+# Calculate monthly mean soil moisture
 # ------------------------------------------------------------
 
-robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
-  mutate(month = floor_date(date, unit = "month")) %>%
+robson_soilmoisture <- GERI_soilmoisture_30min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  )
+
+robson_soilmoisture_monthly <- robson_soilmoisture %>%
+  mutate(month = floor_date(start_date_time, unit = "month")) %>%
   group_by(month) %>%
   summarise(
-    soil_moisture = mean(
-      mean_soil_moisture,
-      na.rm = TRUE
-    ),
+    soil_moisture = if (all(is.na(mean_swc_percent))) {
+      NA_real_
+    } else {
+      mean(mean_swc_percent, na.rm = TRUE)
+    },
     .groups = "drop"
   )
 
+
 # ------------------------------------------------------------
-# 3. Combine the two monthly datasets
+# Calculate monthly cumulative precipitation
 # ------------------------------------------------------------
 
-robson_monthly_soil <- full_join(
-  robson_soiltemperature_monthly,
-  robson_soilmoisture_monthly,
-  by = "month"
-) %>%
-  filter(
-    month >= as.Date("2023-01-01"),
-    month <= as.Date("2026-12-31")
-  ) %>%
+robson_precipitation <- GERI_precipitation_60min %>%
+  filter(site_id == "AU-Rob") %>%
+  mutate(
+    start_date_time = as.POSIXct(start_date_time)
+  )
+
+robson_precipitation_monthly <- robson_precipitation %>%
+  mutate(month = floor_date(start_date_time, unit = "month")) %>%
+  group_by(month) %>%
+  summarise(
+    precipitation = if (all(is.na(bulk_precipitation_mm))) {
+      NA_real_
+    } else {
+      sum(bulk_precipitation_mm, na.rm = TRUE)
+    },
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# Combine the monthly datasets
+# ------------------------------------------------------------
+
+robson_monthly <- robson_soiltemperature_monthly %>%
+  full_join(robson_soilmoisture_monthly, by = "month") %>%
+  full_join(robson_precipitation_monthly, by = "month") %>%
   pivot_longer(
-    cols = c(soil_temperature, soil_moisture),
+    cols = all_of(c(
+      "soil_temperature",
+      "soil_moisture",
+      "precipitation"
+    )),
     names_to = "variable",
     values_to = "value"
   ) %>%
@@ -1758,32 +1048,34 @@ robson_monthly_soil <- full_join(
     variable = recode(
       variable,
       soil_temperature = "Soil temperature (°C)",
-      soil_moisture = "Soil moisture (%)"
+      soil_moisture = "Soil moisture (%)",
+      precipitation = "Precipitation (mm)"
     )
   )
 
+
 # ------------------------------------------------------------
-# 4. Plot the monthly averages
+# Plot the monthly data
 # ------------------------------------------------------------
 
 ggplot(
-  robson_monthly_soil,
+  robson_monthly,
   aes(x = month, y = value)
 ) +
-  geom_line() +
-  geom_point(size = 1.5) +
+  geom_line(na.rm = TRUE) +
+  geom_point(size = 1.5, na.rm = TRUE) +
   facet_wrap(
     ~ variable,
     ncol = 1,
     scales = "free_y"
   ) +
   scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
+    date_breaks = "6 months",
+    date_labels = "%b %Y",
+    expand = expansion(mult = c(0.01, 0.02))
   ) +
   labs(
-    title = "Robson Creek: monthly soil temperature and moisture",
-    subtitle = "January 2023–2026",
+    title = "Robson Creek: monthly environmental conditions",
     x = "Month",
     y = NULL
   ) +
@@ -1791,9 +1083,15 @@ ggplot(
   theme(
     axis.text.x = element_text(
       angle = 45,
-      hjust = 1
-    )
+      hjust = 1,
+      size = 8
+    ),
+    strip.text = element_text(
+      face = "bold"
+    ),
+    panel.spacing = unit(1, "lines")
   )
+
 
 # ------------------------------------------------------------
 # Interpretation
@@ -1818,251 +1116,15 @@ ggplot(
 # also be investigated.
 
 ```
-# let's add average monthly precipitation as well
 
-```{r}
 
-# ------------------------------------------------------------
-# Robson Creek: monthly soil temperature, soil moisture
-# and precipitation
-# ------------------------------------------------------------
 
-# Scientific investigation
-#
-# Did soil temperatures increase because the surrounding air
-# became hotter, or because conditions at the soil surface changed?
-#
-# If soil temperature rises dramatically while air temperature
-# maintains its previous seasonal pattern, that would strengthen
-# the case for a local canopy effect.
-#
-# Did soil moisture decline when soil temperature increased?
-#
-# Was the decline in soil moisture associated with reduced rainfall?
-#
-# If rainfall remained relatively consistent, could changes
-# in canopy cover or local soil conditions help explain the results?
-#
-# Examine the timing of changes across all three variables.
-
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-library(lubridate)
-
-# ------------------------------------------------------------
-# 1. Calculate monthly mean soil temperature
-# ------------------------------------------------------------
-
-robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
-  mutate(month = floor_date(date, unit = "month")) %>%
-  group_by(month) %>%
-  summarise(
-    soil_temperature = mean(
-      mean_soil_temperature,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-# ------------------------------------------------------------
-# 2. Calculate monthly mean soil moisture
-# ------------------------------------------------------------
-
-robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
-  mutate(month = floor_date(date, unit = "month")) %>%
-  group_by(month) %>%
-  summarise(
-    soil_moisture = mean(
-      mean_soil_moisture,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-# ------------------------------------------------------------
-# 3. Calculate monthly total precipitation
-# ------------------------------------------------------------
-
-# Sum daily precipitation totals to obtain monthly rainfall.
-# Count days with observations to help assess data completeness.
-
-robson_precipitation_monthly <- robson_precipitation_daily %>%
-  mutate(month = floor_date(date, unit = "month")) %>%
-  group_by(month) %>%
-  summarise(
-    precipitation = sum(daily_precipitation, na.rm = TRUE),
-    days_with_data = n(),
-    .groups = "drop"
-  )
-
-# ------------------------------------------------------------
-# 4. Combine the three monthly datasets
-# ------------------------------------------------------------
-
-robson_monthly_environment <- robson_soiltemperature_monthly %>%
-  full_join(
-    robson_soilmoisture_monthly,
-    by = "month"
-  ) %>%
-  full_join(
-    robson_precipitation_monthly,
-    by = "month"
-  ) %>%
-  filter(
-    month >= as.Date("2023-01-01"),
-    month <= as.Date("2026-12-31")
-  ) %>%
-  select(month, soil_temperature, soil_moisture, precipitation) %>%
-  pivot_longer(
-    cols = c(soil_temperature, soil_moisture, precipitation),
-    names_to = "variable",
-    values_to = "value"
-  ) %>%
-  mutate(
-    variable = factor(
-      variable,
-      levels = c(
-        "soil_moisture",
-        "soil_temperature",
-        "precipitation"
-      ),
-      labels = c(
-        "Soil moisture (%)",
-        "Soil temperature (°C)",
-        "Monthly precipitation (mm)"
-      )
-    )
-  )
-
-# ------------------------------------------------------------
-# 5. Plot all three variables
-# ------------------------------------------------------------
-
-ggplot(
-  robson_monthly_environment,
-  aes(x = month, y = value)
-) +
-  geom_line() +
-  geom_point(size = 1.5) +
-  facet_wrap(
-    ~ variable,
-    ncol = 1,
-    scales = "free_y"
-  ) +
-  scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
-  ) +
-  labs(
-    title = "Robson Creek: monthly environmental conditions",
-    subtitle = "Soil moisture, soil temperature and precipitation (2023–2026)",
-    x = "Month",
-    y = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(
-      angle = 45,
-      hjust = 1
-    )
-  )
-
-# ------------------------------------------------------------
-# Interpretation
-# ------------------------------------------------------------
-
-# 1. When does soil temperature begin to increase?
-#
-# 2. Does soil moisture decline during the same period?
-#
-# 3. Does precipitation also decline, or does rainfall
-#    remain relatively consistent?
-#
-# 4. Could reduced rainfall explain the soil moisture decline?
-#
-# 5. If rainfall does not decline, what other mechanisms
-#    could explain the changes in soil temperature and moisture?
-#
-# 6. Is the timing consistent with the reported tree removal?
-#
-# IMPORTANT:
-# Monthly rainfall totals may be underestimated where
-# observations are missing. Check days_with_data before
-# interpreting unusually low monthly rainfall.
-#
-# Correlation between variables does not establish causation.
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: check monthly precipitation data completeness
-# ------------------------------------------------------------
-
-# How many days contain precipitation observations each month?
-# Low rainfall totals may reflect missing observations rather
-# than genuinely dry conditions.
-
-robson_precipitation_monthly %>%
-  filter(month >= as.Date("2023-01-01")) %>%
-  select(month, precipitation, days_with_data) %>%
-  print(n = Inf)
-
-```
-
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: check hourly rainfall observations
-# September to November 2025
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Were the zero monthly rainfall totals genuine?
-#
-# Did the precipitation sensor continue reporting observations?
-#
-# Were measurements missing, or were all recorded values zero?
-#
-# This check helps distinguish possible drought conditions
-# from potential sensor or data-quality problems.
-
-GERI_precipitation_60min %>%
-  filter(
-    site_id == "AU-Rob",
-    as.Date(start_date_time) >= as.Date("2025-09-01"),
-    as.Date(start_date_time) <= as.Date("2025-11-30")
-  ) %>%
-  mutate(
-    month = format(as.Date(start_date_time), "%Y-%m")
-  ) %>%
-  group_by(month) %>%
-  summarise(
-    total_records = n(),
-    valid_records = sum(!is.na(bulk_precipitation_mm)),
-    missing_records = sum(is.na(bulk_precipitation_mm)),
-    positive_rainfall_records = sum(
-      bulk_precipitation_mm > 0,
-      na.rm = TRUE
-    ),
-    maximum_hourly_rainfall = if (
-      all(is.na(bulk_precipitation_mm))
-    ) NA_real_ else max(
-      bulk_precipitation_mm,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-```
 ##Question to confirm with site PI at Robson - when was the large tree removed?
 
 ```{r}
 
 # ------------------------------------------------------------
-# Robson Creek: monthly soil temperature anomalies
+# Robson Creek: monthly soil temperature anomalies            > NOT SURE IF WE ARE KEEPING THIS CHUNK
 # ------------------------------------------------------------
 
 # Scientific investigation
@@ -2132,23 +1194,6 @@ GERI_precipitation_60min %>%
 library(dplyr)
 library(ggplot2)
 library(lubridate)
-
-# ------------------------------------------------------------
-# 1. Calculate monthly mean soil temperature
-# ------------------------------------------------------------
-
-robson_soiltemperature_monthly <- robson_soiltemperature_daily %>%
-  mutate(
-    month = floor_date(date, unit = "month")
-  ) %>%
-  group_by(month) %>%
-  summarise(
-    soil_temperature = mean(
-      mean_soil_temperature,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
 
 # ------------------------------------------------------------
 # 2. Calculate the historical seasonal baseline
@@ -2268,414 +1313,8 @@ ggplot(
 # before attributing the change to canopy removal.
 
 ```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: monthly soil moisture anomalies
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did soil moisture decline at the same time that soil
-# temperature increased?
-#
-# Is the recent decline in soil moisture unusual compared
-# with historical conditions for the same time of year?
-#
-# Could changes in rainfall, evaporation, vegetation water
-# uptake or canopy cover help explain the observed pattern?
 
 
-# ------------------------------------------------------------
-# What is a soil moisture anomaly?
-# ------------------------------------------------------------
-
-# A soil moisture anomaly measures how much observed soil
-# moisture differs from the historical average for the
-# same calendar month.
-#
-# For Robson Creek, we use 2013–2023 as the reference period.
-#
-# Step 1: Calculate mean soil moisture for each month.
-#
-# Step 2: For each calendar month (January, February, etc.),
-#         calculate the average of monthly means across
-#         the 2013–2023 reference period.
-#
-# Step 3: Subtract the historical average for that calendar
-#         month from the observed monthly mean soil moisture.
-#
-# Soil moisture anomaly (percentage points) =
-#   Observed monthly mean - Historical mean for the same month
-#
-# Example:
-# If the historical October mean was 30% and the observed
-# October 2025 mean was 20%, the anomaly would be -10
-# percentage points.
-#
-# Positive anomalies indicate wetter-than-average soil.
-# Negative anomalies indicate drier-than-average soil.
-#
-# This is a site-specific historical baseline, not a
-# standard 30-year climatological reference period.
-#
-# IMPORTANT:
-# An anomaly identifies a departure from historical conditions.
-# It does not establish what caused that departure.
-
-
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-
-
-# ------------------------------------------------------------
-# 1. Calculate monthly mean soil moisture
-# ------------------------------------------------------------
-
-robson_soilmoisture_monthly <- robson_soilmoisture_daily %>%
-  mutate(
-    month = floor_date(date, unit = "month")
-  ) %>%
-  group_by(month) %>%
-  summarise(
-    soil_moisture = mean(
-      mean_soil_moisture,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-
-# ------------------------------------------------------------
-# 2. Calculate the historical seasonal baseline
-# ------------------------------------------------------------
-
-robson_moisture_baseline <- robson_soilmoisture_monthly %>%
-  mutate(
-    year = year(month),
-    calendar_month = month(month)
-  ) %>%
-  filter(
-    year >= 2013,
-    year <= 2023
-  ) %>%
-  group_by(calendar_month) %>%
-  summarise(
-    baseline_moisture = mean(
-      soil_moisture,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-
-# ------------------------------------------------------------
-# 3. Calculate monthly soil moisture anomalies
-# ------------------------------------------------------------
-
-robson_moisture_anomalies <- robson_soilmoisture_monthly %>%
-  mutate(
-    calendar_month = month(month)
-  ) %>%
-  left_join(
-    robson_moisture_baseline,
-    by = "calendar_month"
-  ) %>%
-  mutate(
-    moisture_anomaly = soil_moisture - baseline_moisture
-  ) %>%
-  filter(
-    month >= as.Date("2023-01-01"),
-    month <= as.Date("2026-12-31")
-  )
-
-
-# ------------------------------------------------------------
-
-# ------------------------------------------------------------
-# 4. Plot monthly soil moisture anomalies
-# ------------------------------------------------------------
-
-ggplot(
-  robson_moisture_anomalies,
-  aes(
-    x = month,
-    y = moisture_anomaly
-  )
-) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed"
-  ) +
-  geom_col(
-    aes(fill = moisture_anomaly > 0)
-  ) +
-  scale_fill_manual(
-    name = "Soil moisture anomaly",
-    values = c(
-      "TRUE" = "steelblue",
-      "FALSE" = "firebrick"
-    ),
-    breaks = c("TRUE", "FALSE"),
-    labels = c(
-      "Wetter than average",
-      "Drier than average"
-    )
-  ) +
-  scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
-  ) +
-  labs(
-    title = "Robson Creek: monthly soil moisture anomalies",
-    subtitle = "Relative to the 2013–2023 seasonal baseline",
-    x = "Month",
-    y = "Soil moisture anomaly (percentage points)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(
-      angle = 45,
-      hjust = 1
-    ),
-    legend.position = "bottom"
-  )
-
-# ------------------------------------------------------------
-# Interpretation
-# ------------------------------------------------------------
-
-# 1. Are soil moisture anomalies consistently negative
-#    during the period of increasing soil temperature?
-#
-# 2. When do negative anomalies first appear?
-#
-# 3. Are the recent negative anomalies more extreme
-#    than those observed in earlier years?
-#
-# 4. Could rainfall variation explain the soil moisture
-#    anomalies, or might local soil conditions contribute?
-#
-# 5. Do the timing and magnitude of changes support
-#    investigating the reported tree-removal event?
-#
-# Remember:
-# Correlation does not establish causation.
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: monthly precipitation anomalies
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did rainfall decline during the period when soil
-# temperature increased and soil moisture decreased?
-#
-# Were recent rainfall totals unusually low compared
-# with historical conditions for the same time of year?
-#
-# Could reduced rainfall explain the negative soil
-# moisture anomalies observed during 2025?
-#
-# Does the timing of rainfall anomalies correspond with
-# the increase in soil temperature?
-
-
-# ------------------------------------------------------------
-# What is a precipitation anomaly?
-# ------------------------------------------------------------
-
-# A precipitation anomaly measures how much rainfall in a
-# particular month differs from the historical average
-# rainfall for that same calendar month.
-#
-# For Robson Creek, we use 2013–2023 as the reference period.
-#
-# Step 1: Sum daily rainfall to calculate the total
-#         precipitation recorded in each month.
-#
-# Step 2: For each calendar month (January, February, etc.),
-#         calculate the average monthly rainfall total
-#         across the 2013–2023 reference period.
-#
-# Step 3: Subtract the historical average from the observed
-#         monthly rainfall total.
-#
-# Precipitation anomaly (mm) =
-#   Observed monthly total - Historical mean monthly total
-#
-# Example:
-# If the historical October average was 150 mm and
-# October 2025 recorded 50 mm, the anomaly would be -100 mm.
-#
-# Positive anomalies indicate wetter-than-average months.
-# Negative anomalies indicate drier-than-average months.
-#
-# IMPORTANT DATA QUALITY NOTE:
-#
-# September, October and November 2025 contain zero
-# recorded precipitation despite hourly observations.
-#
-# These values may reflect equipment failure or another
-# data-quality issue. This has not yet been confirmed.
-#
-# The anomalies for these months must therefore be
-# treated as provisional and should not be interpreted
-# as evidence of drought until verified with the PI.
-
-
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-
-
-# ------------------------------------------------------------
-# 1. Calculate monthly precipitation totals
-# ------------------------------------------------------------
-
-robson_precipitation_monthly <- robson_precipitation_daily %>%
-  mutate(
-    month = floor_date(date, unit = "month")
-  ) %>%
-  group_by(month) %>%
-  summarise(
-    precipitation = sum(
-      daily_precipitation,
-      na.rm = TRUE
-    ),
-    days_with_data = n(),
-    .groups = "drop"
-  )
-
-
-# ------------------------------------------------------------
-# 2. Calculate the historical seasonal baseline
-# ------------------------------------------------------------
-
-robson_precipitation_baseline <- robson_precipitation_monthly %>%
-  mutate(
-    year = year(month),
-    calendar_month = month(month)
-  ) %>%
-  filter(
-    year >= 2013,
-    year <= 2023
-  ) %>%
-  group_by(calendar_month) %>%
-  summarise(
-    baseline_precipitation = mean(
-      precipitation,
-      na.rm = TRUE
-    ),
-    .groups = "drop"
-  )
-
-
-# ------------------------------------------------------------
-# 3. Calculate monthly precipitation anomalies
-# ------------------------------------------------------------
-
-robson_precipitation_anomalies <- robson_precipitation_monthly %>%
-  mutate(
-    calendar_month = month(month)
-  ) %>%
-  left_join(
-    robson_precipitation_baseline,
-    by = "calendar_month"
-  ) %>%
-  mutate(
-    precipitation_anomaly =
-      precipitation - baseline_precipitation
-  ) %>%
-  filter(
-    month >= as.Date("2023-01-01"),
-    month <= as.Date("2026-12-31")
-  )
-
-
-# ------------------------------------------------------------
-
-# ------------------------------------------------------------
-# 4. Plot monthly precipitation anomalies
-# ------------------------------------------------------------
-
-ggplot(
-  robson_precipitation_anomalies,
-  aes(
-    x = month,
-    y = precipitation_anomaly
-  )
-) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed"
-  ) +
-  geom_col(
-    aes(fill = precipitation_anomaly > 0)
-  ) +
-  scale_fill_manual(
-    name = "Precipitation anomaly",
-    values = c(
-      "TRUE" = "steelblue",
-      "FALSE" = "firebrick"
-    ),
-    breaks = c("TRUE", "FALSE"),
-    labels = c(
-      "Wetter than average",
-      "Drier than average"
-    )
-  ) +
-  scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
-  ) +
-  labs(
-    title = "Robson Creek: monthly precipitation anomalies",
-    subtitle = "Relative to the 2013–2023 seasonal baseline; late 2025 data unverified",
-    x = "Month",
-    y = "Precipitation anomaly (mm)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(
-      angle = 45,
-      hjust = 1
-    ),
-    legend.position = "bottom"
-  )
-
-
-# ------------------------------------------------------------
-# Interpretation
-# ------------------------------------------------------------
-
-# 1. Were precipitation anomalies predominantly negative
-#    during the period of increasing soil temperature?
-#
-# 2. Do negative precipitation anomalies coincide with
-#    negative soil moisture anomalies?
-#
-# 3. Were there unusually wet months immediately before
-#    the apparent decline in rainfall?
-#
-# 4. Could rainfall variation explain some of the changes
-#    in soil moisture and soil temperature?
-#
-# 5. How might equipment failure affect our interpretation
-#    of precipitation anomalies?
-#
-# IMPORTANT:
-# September–November 2025 precipitation data require
-# confirmation from the PI before ecological interpretation.
-#
-# Monthly totals can also be underestimated when hourly
-# measurements are missing, even if each day has some data.
-
-```
 ```{r}
 
 # ------------------------------------------------------------
@@ -2905,7 +1544,7 @@ ggplot(
 ```{r}
 
 # ------------------------------------------------------------
-# Robson Creek: soil versus air temperature anomalies
+# Robson Creek: soil versus air temperature anomalies          > MAYBE KEEP THIS GRAPH, BUT REMOVE THE TWO PREVIOUS ONES
 # ------------------------------------------------------------
 
 # Scientific investigation
@@ -3045,559 +1684,11 @@ ggplot(
 # before drawing conclusions.
 
 ```
-```{r}
 
-# ------------------------------------------------------------
-# Robson Creek: soil moisture versus precipitation anomalies
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did unusually low rainfall coincide with unusually low
-# soil moisture during 2025?
-#
-# Does soil moisture respond immediately to changes in
-# precipitation, or is there a delay?
-#
-# Could changes in soil moisture reflect local changes
-# in vegetation, evaporation or canopy cover?
-#
-# Both anomalies use the 2013–2023 historical baseline.
-#
-# IMPORTANT:
-# September–November 2025 rainfall readings are unverified.
-# Possible equipment failure must be investigated with the PI.
-# These months are shown but should not be interpreted as
-# confirmed drought conditions.
-
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-
-# ------------------------------------------------------------
-# 1. Combine the existing anomaly datasets
-# ------------------------------------------------------------
-
-robson_moisture_rainfall_comparison <- robson_moisture_anomalies %>%
-  select(
-    month,
-    `Soil moisture anomaly (percentage points)` = moisture_anomaly
-  ) %>%
-  full_join(
-    robson_precipitation_anomalies %>%
-      select(
-        month,
-        `Precipitation anomaly (mm)` = precipitation_anomaly
-      ),
-    by = "month"
-  ) %>%
-  pivot_longer(
-    cols = -month,
-    names_to = "variable",
-    values_to = "anomaly"
-  ) %>%
-  mutate(
-    variable = factor(
-      variable,
-      levels = c(
-        "Soil moisture anomaly (percentage points)",
-        "Precipitation anomaly (mm)"
-      )
-    )
-  )
-
-# ------------------------------------------------------------
-
-# ------------------------------------------------------------
-# 2. Plot both anomalies with separate y-axis scales
-# ------------------------------------------------------------
-
-ggplot(
-  robson_moisture_rainfall_comparison,
-  aes(x = month, y = anomaly)
-) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed",
-    colour = "grey50"
-  ) +
-  geom_col(
-    aes(fill = anomaly >= 0)
-  ) +
-  scale_fill_manual(
-    name = "Moisture and precipitation anomalies",
-    values = c(
-      "TRUE" = "steelblue",
-      "FALSE" = "firebrick"
-    ),
-    breaks = c("TRUE", "FALSE"),
-    labels = c(
-      "Wetter than average",
-      "Drier than average"
-    )
-  ) +
-  facet_wrap(
-    ~ variable,
-    ncol = 1,
-    scales = "free_y"
-  ) +
-  scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
-  ) +
-  labs(
-    title = "Robson Creek: soil moisture and precipitation anomalies",
-    subtitle = "2013–2023 seasonal baseline; late-2025 rainfall unverified",
-    x = "Month",
-    y = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(
-      angle = 45,
-      hjust = 1
-    ),
-    legend.position = "bottom"
-  )
-
-# ------------------------------------------------------------
-# Interpretation
-# ------------------------------------------------------------
-
-# 1. Do negative precipitation anomalies occur before,
-#    during or after negative soil moisture anomalies?
-#
-# 2. Are soil moisture anomalies negative even when
-#    precipitation anomalies are positive?
-#
-# 3. Could there be a delayed soil moisture response
-#    to changes in rainfall?
-#
-# 4. How does uncertainty in the rainfall measurements
-#    affect our interpretation?
-
-```
-```{r}
-
-# ------------------------------------------------------------
-# Robson Creek: comparison of four environmental anomalies
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# Did soil temperatures increase because the surrounding air
-# became hotter, or because conditions at the soil surface changed?
-#
-# If soil temperature rises dramatically while air temperature
-# maintains its previous seasonal pattern, that would strengthen
-# the case for a local canopy effect.
-#
-# How do soil temperature, air temperature, soil moisture and
-# precipitation anomalies compare over the same period?
-#
-# All anomalies are calculated relative to the 2013–2023
-# historical seasonal baseline for Robson Creek.
-#
-# Temperature anomalies are measured in degrees Celsius.
-# Soil moisture anomalies are measured in percentage points.
-# Precipitation anomalies are measured in millimetres.
-#
-# Each variable has its own y-axis scale to avoid misleading
-# comparisons between different measurement units.
-#
-# IMPORTANT DATA QUALITY NOTE:
-# September–November 2025 precipitation readings are unverified.
-# The zero rainfall readings may reflect equipment failure.
-# Confirmation from the PI is required before interpreting
-# these months as evidence of drought.
-
-
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-
-
-knitr::opts_current$set(fig.width = 12, fig.height = 12)
-
-
-
-
-# ------------------------------------------------------------
-# 1. Combine the four existing anomaly datasets
-# ------------------------------------------------------------
-
-robson_all_anomalies <- robson_soil_anomalies %>%
-  select(
-    month,
-    soil_temperature = temperature_anomaly
-  ) %>%
-  full_join(
-    robson_air_anomalies %>%
-      select(
-        month,
-        air_temperature = temperature_anomaly
-      ),
-    by = "month"
-  ) %>%
-  full_join(
-    robson_moisture_anomalies %>%
-      select(
-        month,
-        soil_moisture = moisture_anomaly
-      ),
-    by = "month"
-  ) %>%
-  full_join(
-    robson_precipitation_anomalies %>%
-      select(
-        month,
-        precipitation = precipitation_anomaly
-      ),
-    by = "month"
-  ) %>%
-  pivot_longer(
-    cols = -month,
-    names_to = "variable",
-    values_to = "anomaly"
-  ) %>%
-  mutate(
-    variable = factor(
-      variable,
-      levels = c(
-        "soil_temperature",
-        "air_temperature",
-        "soil_moisture",
-        "precipitation"
-      ),
-      labels = c(
-        "Soil temperature anomaly (°C)",
-        "Air temperature anomaly (°C)",
-        "Soil moisture anomaly (percentage points)",
-        "Precipitation anomaly (mm)"
-      )
-    )
-  )
-
-
-# ------------------------------------------------------------
-
-# 
-# ------------------------------------------------------------
-# 2. Plot all four environmental anomalies
-# ------------------------------------------------------------
-
-# Assign separate colour pairs to each environmental variable.
-# Positive temperature anomalies indicate warmer conditions.
-# Positive moisture and precipitation anomalies indicate wetter
-# conditions. Negative anomalies indicate the opposite.
-
-robson_all_anomalies <- robson_all_anomalies %>%
-  mutate(
-    anomaly_category = case_when(
-      grepl("soil temperature", variable, ignore.case = TRUE) &
-        anomaly >= 0 ~ "Soil temp: warmer",
-      grepl("soil temperature", variable, ignore.case = TRUE) &
-        anomaly < 0 ~ "Soil temp: cooler",
-
-      grepl("air temperature", variable, ignore.case = TRUE) &
-        anomaly >= 0 ~ "Air temp: warmer",
-      grepl("air temperature", variable, ignore.case = TRUE) &
-        anomaly < 0 ~ "Air temp: cooler",
-
-      grepl("soil moisture", variable, ignore.case = TRUE) &
-        anomaly >= 0 ~ "Soil moisture: wetter",
-      grepl("soil moisture", variable, ignore.case = TRUE) &
-        anomaly < 0 ~ "Soil moisture: drier",
-
-      grepl("precipitation", variable, ignore.case = TRUE) &
-        anomaly >= 0 ~ "Rainfall: wetter",
-      grepl("precipitation", variable, ignore.case = TRUE) &
-        anomaly < 0 ~ "Rainfall: drier",
-
-      TRUE ~ NA_character_
-    )
-  )
-
-# Define colours and compact legend labels.
-
-anomaly_colours <- c(
-  "Soil temp: warmer" = "#B22222",
-  "Soil temp: cooler" = "#4682B4",
-  "Air temp: warmer" = "#E88B43",
-  "Air temp: cooler" = "#6A79B8",
-  "Soil moisture: wetter" = "#25877D",
-  "Soil moisture: drier" = "#C59A55",
-  "Rainfall: wetter" = "#2364AA",
-  "Rainfall: drier" = "#A48A73"
-)
-
-ggplot(
-  robson_all_anomalies,
-  aes(x = month, y = anomaly)
-) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed",
-    colour = "grey50"
-  ) +
-  geom_col(
-    aes(fill = anomaly_category)
-  ) +
-  scale_fill_manual(
-    name = NULL,
-    values = anomaly_colours,
-    breaks = names(anomaly_colours),
-    drop = FALSE
-  ) +
-  facet_wrap(
-    ~ variable,
-    ncol = 1,
-    scales = "free_y"
-  ) +
-  scale_x_date(
-    date_breaks = "3 months",
-    date_labels = "%b %Y"
-  ) +
-  labs(
-    title = "Robson Creek: environmental anomalies",
-    subtitle = paste(
-      "Relative to the 2013–2023 seasonal baseline;",
-      "late-2025 rainfall unverified"
-    ),
-    x = "Month",
-    y = NULL
-  ) +
-  guides(
-    fill = guide_legend(
-      nrow = 4,
-      byrow = TRUE,
-      override.aes = list(colour = NA)
-    )
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(
-      angle = 45,
-      hjust = 1
-    ),
-    legend.position = "bottom",
-    legend.text = element_text(size = 7),
-    legend.key.size = grid::unit(0.3, "cm"),
-    legend.spacing.y = grid::unit(0.05, "cm"),
-    legend.margin = margin(0, 0, 0, 0)
-  )
-
-# ------------------------------------------------------------
-# Interpretation
-# ------------------------------------------------------------
-
-# 1. When does the soil temperature anomaly begin to diverge
-#    from the air temperature anomaly?
-#
-# 2. Does the increase in soil temperature precede the
-#    decline in soil moisture?
-#
-# 3. Do negative precipitation anomalies coincide with
-#    negative soil moisture anomalies?
-#
-# 4. Could reduced rainfall explain the soil temperature
-#    increase, or did warming begin earlier?
-#
-# 5. What evidence supports a possible local canopy effect?
-#
-# 6. What additional information is required to distinguish
-#    environmental change from instrumentation problems?
-#
-# Consider:
-# - Timing of tree removal
-# - Soil temperature sensor location and depth
-# - Sensor maintenance and calibration records
-# - Precipitation equipment performance
-# - Changes in canopy cover and solar exposure
-#
-# IMPORTANT:
-# These patterns demonstrate associations and departures
-# from historical conditions, not causation.
-
-
-```
-```{r}
-###NOTE: REMOVE THIS FROM THE FINAL CODE - JUST SHOWS THAT ROBSON CK DOES NOT HAVE BIRD CALLS FOR THE TIME PERIOD OF THE SOIL TEMP ANOMALY so not much to explore there
-
-# ------------------------------------------------------------
-# Robson Creek: temporal coverage of bird acoustic records
-# ------------------------------------------------------------
-
-# Scientific investigation
-#
-# How long have acoustic records been collected for each species?
-#
-# Do the records overlap with the environmental changes
-# observed at Robson Creek during 2024–2025?
-#
-# Are there gaps in the monitoring period?
-
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-
-# ------------------------------------------------------------
-# 1. Identify the nine Robson Creek species datasets
-# ------------------------------------------------------------
-
-species_names <- c(
-  "Gerygone_mouki",
-  "Macropygia_phasianella",
-  "Megaloprepia_magnifica",
-  "Meliphaga_lewinii",
-  "Orthonyx_spaldingii",
-  "Ptilinopus_superbus",
-  "Rhipidura_albiscapa",
-  "Rhipidura_rufifrons",
-  "Sericornis_magnirostra"
-)
-
-# Search the existing workshop folder and its subfolders.
-
-species_files <- list.files(
-  path = folder,
-  pattern = "\\.csv$",
-  recursive = TRUE,
-  full.names = TRUE
-)
-
-species_files <- species_files[
-  vapply(
-    basename(species_files),
-    function(x) any(vapply(
-      species_names,
-      grepl,
-      logical(1),
-      x = x,
-      fixed = TRUE
-    )),
-    logical(1)
-  )
-]
-
-# ------------------------------------------------------------
-# 2. Extract the dates from each dataset
-# ------------------------------------------------------------
-
-species_coverage <- lapply(species_files, function(file) {
-
-  data <- read.csv(file, check.names = FALSE)
-
-  # Identify a date or timestamp column.
-
-  date_columns <- grep(
-    "date|timestamp|recorded|eventstart",
-    names(data),
-    ignore.case = TRUE,
-    value = TRUE
-  )
-
-  if (length(date_columns) == 0) {
-    stop(paste("No date column found in:", basename(file)))
-  }
-
-  # Convert the first matching column to dates.
-
-  dates <- as.Date(
-    parse_date_time(
-      as.character(data[[date_columns[1]]]),
-      orders = c(
-        "ymd HMS", "ymd HM", "ymd",
-        "dmy HMS", "dmy HM", "dmy",
-        "mdy HMS", "mdy HM", "mdy"
-      ),
-      quiet = TRUE
-    )
-  )
-
-  # Extract the species name from the filename.
-
-  species <- species_names[
-    vapply(
-      species_names,
-      function(x) grepl(x, basename(file), fixed = TRUE),
-      logical(1)
-    )
-  ][1]
-
-  data.frame(
-    species = gsub("_", " ", species),
-    date = dates
-  )
-
-}) %>%
-  bind_rows() %>%
-  filter(!is.na(date))
-
-# ------------------------------------------------------------
-# 3. Identify months containing acoustic records
-# ------------------------------------------------------------
-
-# Plot actual months with records rather than joining the
-# first and last dates across potentially large data gaps.
-
-species_months <- species_coverage %>%
-  mutate(month = floor_date(date, "month")) %>%
-  distinct(species, month)
-
-# ------------------------------------------------------------
-# 4. Plot temporal coverage for each species
-# ------------------------------------------------------------
-
-ggplot(
-  species_months,
-  aes(x = month, y = species)
-) +
-  geom_tile(
-    fill = "steelblue",
-    height = 0.7,
-    width = 25
-  ) +
-  scale_x_date(
-    date_breaks = "1 year",
-    date_labels = "%Y"
-  ) +
-  labs(
-    title = "Robson Creek: temporal coverage of bird acoustic records",
-    subtitle = "Coloured months contain acoustic records",
-    x = "Year",
-    y = "Species"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    axis.text.x = element_text(colour = "black"),
-    axis.text.y = element_text(colour = "black"),
-    axis.title = element_text(colour = "black"),
-    panel.grid.minor = element_blank()
-  )
-
-# ------------------------------------------------------------
-# Questions for interpretation
-# ------------------------------------------------------------
-
-# 1. Which species have the longest acoustic records?
-#
-# 2. Are all nine species monitored over the same period?
-#
-# 3. Are there gaps in acoustic monitoring?
-#
-# 4. Do any records extend into 2024–2025?
-#
-# 5. Which species have sufficient temporal coverage
-#    for investigating ecological change?
-
-```
-##CHECKING IF TUMBARUMBA HAS AIR TEMP / SOIL TEMP ANOMALY
 
 ```{r}
-
 # ------------------------------------------------------------
-# Tumbarumba: soil temperature and soil moisture through time
+# Tumbarumba: soil temperature and soil moisture through time  > CHECK GAPS IN THE DATA SHOWING AS LINES IN THE PLOT
 # ------------------------------------------------------------
 
 # Scientific investigation
